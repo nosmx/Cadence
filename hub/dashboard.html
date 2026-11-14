@@ -38,7 +38,7 @@
   <div class="stat"><b id="depth">–</b><span>depth cm (est.)</span></div>
   <div class="stat"><b id="quality">–</b><span>cue</span></div>
   <div class="stat"><b id="hr">–</b><span>rescuer HR</span></div>
-  <div class="stat"><b id="near">–</b><span>at anchor</span></div>
+  <div class="stat"><b id="place">–</b><span>hands</span></div>
 </div>
 
 <h2 style="font-size:16px">Timeline</h2>
@@ -48,9 +48,10 @@
 <script>
 const $ = id => document.getElementById(id);
 const PHASES = ["check", "call", "position", "compress", "aed"];
-let phase = "check", lastComp = 0, lowConf = false;  // lastComp: local ms when last compression arrived
+let phase = "check", lastComp = 0, lowConf = false, count = 0;  // lastComp: local ms when last compression arrived
+const MIN_CONF = 0.6, STALE_S = 1.5;  // same as glasses-app/src/coach.ts LIMITS
 const post = m => fetch("/msg", {method: "POST", headers: {"Content-Type": "application/json"},
-  body: JSON.stringify({...m, ts: Date.now(), src: "dashboard"})});
+  body: JSON.stringify({...m, ts: Date.now(), source: "dashboard"})});
 
 PHASES.forEach(p => {
   const b = document.createElement("button");
@@ -81,16 +82,18 @@ const es = new EventSource("/events");
 es.onmessage = e => {
   const m = JSON.parse(e.data);
   if (m.type === "state") {
+    if (m.phase === "compress" && phase !== "compress") count = 0;
     phase = m.phase;
     PHASES.forEach(p => $("p-" + p).classList.toggle("on", p === phase));
   } else if (m.type === "compression") {
-    lastComp = Date.now(); lowConf = m.confidence < 0.5;
-    $("count").textContent = m.count;
+    lastComp = Date.now(); lowConf = m.confidence < MIN_CONF;
+    $("count").textContent = ++count;
     $("rate").textContent = lowConf ? "?" : m.rate_cpm;
-    $("depth").textContent = lowConf || m.depth_cm == null ? "?" : m.depth_cm.toFixed(1);
+    $("depth").textContent = lowConf ? "?" : m.depth_cm.toFixed(1);
     $("quality").textContent = lowConf ? "?" : m.quality.toUpperCase();
   } else if (m.type === "vitals") $("hr").textContent = m.hr_bpm;
-  else if (m.type === "trigger") $("near").textContent = m.near ? "yes" : "no";
+  else if (m.type === "placement")
+    $("place").textContent = m.on_target ? "on spot" : m.direction ? `→ ${m.direction}` : "off spot";
   else if (m.type === "log_entry") entry(m);
 };
 es.onerror = () => { $("status").textContent = "Hub disconnected"; $("status").className = "bad"; };
@@ -98,14 +101,14 @@ es.onerror = () => { $("status").textContent = "Hub disconnected"; $("status").c
 setInterval(() => {  // fail visibly: same rules the glasses follow (PROTOCOL.md)
   const s = $("status"), age = (Date.now() - lastComp) / 1000;
   if (es.readyState !== 1) return;
-  if (phase === "compress" && (!lastComp || age > 2)) { s.textContent = "SENSOR LOST"; s.className = "bad"; }
+  if (phase === "compress" && (!lastComp || age > STALE_S)) { s.textContent = "SENSOR LOST"; s.className = "bad"; }
   else if (phase === "compress" && lowConf) { s.textContent = "LOW SIGNAL"; s.className = "warn"; }
   else { s.textContent = phase === "compress" ? "Sensor OK" : ""; s.className = "ok"; }
 }, 250);
 
 $("voice").onsubmit = e => {
   e.preventDefault();
-  if ($("note").value.trim()) post({type: "voice_event", text: $("note").value.trim()});
+  if ($("note").value.trim()) post({type: "voice_event", phrase: $("note").value.trim()});
   $("note").value = "";
 };
 </script>

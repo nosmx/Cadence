@@ -15,5 +15,7 @@ cp .env.example .env                  # then put your OpenAI key in .env (git ig
 .venv/bin/python hub/test_hub.py      # self-check
 ```
 
-- Person 1 (band): `POST /msg` with `trigger`, `compression`, `vitals` messages.
-- Person 2 (glasses): subscribe to `GET /events` (SSE) or poll `GET /snapshot`; send `state`, `voice_event`, and `log_entry` confirmations to `POST /msg`.
+- Person 1 (band): `POST /msg` with `compression` and `vitals` messages (format in PROTOCOL.md).
+- Person 2 (glasses): open the app with `?ws=ws://<hub-ip>:8000` (the hub prints it). Same format as
+  `glasses-app/src/protocol.ts`; the hub's IP must be in `app.json`'s network whitelist.
+- UNO Q (anchor): `POST /msg` with `placement` messages.

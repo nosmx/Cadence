@@ -31,7 +31,7 @@ def show(title):
 
 notes = ["Okay I called 911, they said eight minutes", "AED is here, putting the pads on now"]
 for n in notes:
-    post({"type": "voice_event", "text": n})
+    post({"type": "voice_event", "phrase": n})
     time.sleep(0.5)
 deadline = time.time() + 40
 while len(entries()) < len(notes) and time.time() < deadline:
