@@ -89,13 +89,17 @@ def pretty(m):
         "" if m["recoil_ok"] is None else "  release ok" if m["recoil_ok"] else "  NOT RELEASED")
 
 
-def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, seconds=None, led=True, show=False):
+def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, seconds=None, led=True, show=False,
+         stats=None):
     """The main loop: everything is processed here, never in a band handler."""
     clock = ClockMap()
     started = time.monotonic()
     next_beat = started
     next_place = started
     spot = chest_input.SpotDetector()
+    # Counted in `stats` too, so the caller still has the number after Ctrl+C.
+    stats = {} if stats is None else stats
+    stats["samples"] = 0
     samples_seen = 0
     while not source.finished:
         now = time.monotonic()
@@ -115,6 +119,7 @@ def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, sec
         reconnecting = source.reconnecting
         for s in samples:
             samples_seen += 1
+            stats["samples"] = samples_seen
             if recorder:
                 recorder.band(s)
             for message in pipeline.add_sample(s.t, s.ax, s.ay, s.az, s.n, reconnecting=reconnecting,
@@ -166,10 +171,11 @@ def main(argv=None):
     if args.voice:
         from .voice_bridge import Voice
         voice = Voice()
-    samples = 0
+    stats = {"samples": 0}
     lost = False
     try:
-        samples = loop(source, pipeline, publisher, chest, recorder, voice, args.seconds, led=not args.no_led, show=args.pretty)
+        loop(source, pipeline, publisher, chest, recorder, voice, args.seconds, led=not args.no_led, show=args.pretty,
+             stats=stats)
     except KeyboardInterrupt:
         pass
     finally:
@@ -189,7 +195,7 @@ def main(argv=None):
               "Movements not counted: %d." % (turning[len(turning) // 2], turning[-1], config.GYRO_MAX_DPS,
                                               d.rejected), file=sys.stderr)
     print("Done: %d compressions, %d samples, %d lost, %d clipped%s." % (
-        d.count, samples, d.total_dropped, d.total_clipped,
+        d.count, stats["samples"], d.total_dropped, d.total_clipped,
         ", %d Arduino readings" % chest.count if chest is not None else ", no Arduino"), file=sys.stderr)
     if lost:
         print("The band disconnected. Double-tap it and start again.", file=sys.stderr)
