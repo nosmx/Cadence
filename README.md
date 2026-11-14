@@ -37,3 +37,7 @@ adb shell 'python3 /home/arduino/anchor.py --hub http://127.0.0.1:8000/msg'   # 
   If it stays on `band=searching`, the band stops advertising while the band laptop is connected
   to it; then use `--addr C1:3F:B9:F4:08:66` and check `bluetoothctl` sees it at all.
   Self-check without a board: `.venv/bin/python hub/test_anchor.py`.
+  Measured 2026-11-14: the band only advertises while NOT connected to the band laptop, and wrist
+  on vs off the spot moved the reading by 3-5 dB (-87 vs -90..-94 dBm), no more than its jitter,
+  with gaps of 3-5 s between readings. Not usable for on-spot as set up; don't run it in a session
+  (its constant "off spot" makes the glasses ignore READY on the alignment screen).
