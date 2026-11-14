@@ -1,14 +1,15 @@
 """Cadence hub (Person 3). Message format: ../PROTOCOL.md
 
 Run:  python hub/hub.py [port]      (default 8000; dashboard at http://localhost:8000)
-Stdlib HTTP + Server-Sent Events. The only dependency is `anthropic`, used for
+Stdlib HTTP + Server-Sent Events. The only dependency is `openai`, used for
 voice note -> timeline entry. Live cues never touch the LLM.
+Needs OPENAI_API_KEY in ../.env (copy .env.example) or the environment.
 """
 import json, os, queue, socket, sys, threading, time, uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import anthropic
+import openai
 
 PHASES = {"check", "call", "position", "compress", "aed"}
 QUALITIES = {"good", "harder", "softer", "faster", "slower"}
@@ -21,13 +22,17 @@ REQUIRED = {  # type -> {field: allowed types}
     "voice_event": {"text": str},
     "log_entry": {"id": str, "status": str},
 }
-MODEL = "claude-opus-5-5"
+MODEL = "gpt-5-mini"
+ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DASHBOARD = Path(__file__).with_name("dashboard.html")
 
-# ponytail: no key in env -> no LLM, voice notes are logged as raw text (an `ant auth login`
-# profile alone isn't detected; export ANTHROPIC_API_KEY)
-HAS_KEY = os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("ANTHROPIC_AUTH_TOKEN")
-CLIENT = anthropic.Anthropic(timeout=20, max_retries=1) if HAS_KEY else None
+CLIENT = None  # set by make_client() at startup; tests leave it None (raw-text entries)
+# Spend caps. Over a cap the note is still logged, as raw text (llm: false).
+LLM_PER_MIN = 4          # calls in any 60 s window
+LLM_PER_RUN = 40         # calls per hub run; restart the hub to reset
+NOTE_MAX_CHARS = 300     # longer notes are cut before they reach the API
+MAX_OUT_TOKENS = 1000    # includes reasoning tokens
+llm_calls: list[float] = []
 
 lock = threading.Lock()
 subs: list[queue.Queue] = []
@@ -78,53 +83,70 @@ def snapshot():
         return list(latest.values()) + list(log.values())
 
 
+def llm_allowed():
+    now = time.time()
+    with lock:
+        if len(llm_calls) >= LLM_PER_RUN or sum(now - t < 60 for t in llm_calls) >= LLM_PER_MIN:
+            return False
+        llm_calls.append(now)
+        return True
+
+
 def summarize(text, phase):
     """Voice note -> {event, detail}. Falls back to the raw text on any failure."""
-    raw = {"event": text[:60], "detail": ""}
+    raw = {"event": text[:60], "detail": "", "llm": False}
     if CLIENT is None:
         return raw
+    if not llm_allowed():
+        print(f"[llm] rate limit ({LLM_PER_MIN}/min, {LLM_PER_RUN}/run): logged as raw text",
+              file=sys.stderr)
+        return raw
+    text = text[:NOTE_MAX_CHARS]
     try:
-        r = CLIENT.beta.messages.create(
+        r = CLIENT.chat.completions.create(
             model=MODEL,
-            max_tokens=16000,
-            betas=["server-side-fallback-2026-07-01"],
-            fallbacks="default",
-            output_config={
-                "effort": "low",
-                "format": {"type": "json_schema", "schema": {
+            reasoning_effort="low",
+            max_completion_tokens=MAX_OUT_TOKENS,
+            response_format={"type": "json_schema", "json_schema": {
+                "name": "timeline_entry", "strict": True, "schema": {
                     "type": "object",
                     "properties": {"event": {"type": "string"}, "detail": {"type": "string"}},
                     "required": ["event", "detail"],
                     "additionalProperties": False,
-                }},
-            },
-            system=(
-                "You log events for a CPR *training* session on a manikin. Turn the rescuer's "
-                "spoken note into one timeline entry. event: at most 6 words naming what happened "
-                "(e.g. '911 called', 'AED pads on', 'Rescuer swap'). detail: anything else they "
-                "said, or ''. Use only what was said. Never add advice, diagnosis or inferences."
-            ),
-            messages=[{"role": "user", "content": f"Current phase: {phase}\nNote: {text}"}],
+                }}},
+            messages=[
+                {"role": "system", "content": (
+                    "You log events for a CPR *training* session on a manikin. Turn the rescuer's "
+                    "spoken note into one timeline entry. event: at most 6 words naming what happened "
+                    "(e.g. '911 called', 'AED pads on', 'Rescuer swap'). detail: anything else they "
+                    "said, or ''. Use only what was said. Never add advice, diagnosis or inferences.")},
+                {"role": "user", "content": f"Current phase: {phase}\nNote: {text}"},
+            ],
         )
-        if r.stop_reason == "refusal":
+        msg = r.choices[0].message
+        if msg.refusal or not msg.content:
             return raw
-        return json.loads(next(b.text for b in r.content if b.type == "text"))
-    except (anthropic.AnthropicError, StopIteration, json.JSONDecodeError) as e:
-        print(f"[llm] fallback to raw text: {e!r}", file=sys.stderr)
+        return json.loads(msg.content) | {"llm": True}
+    except (openai.OpenAIError, json.JSONDecodeError) as e:
+        # type and status only: OpenAI auth errors echo part of the key in their message
+        print(f"[llm] fallback to raw text: {type(e).__name__} {getattr(e, 'status_code', '')}",
+              file=sys.stderr)
         return raw
 
 
 def on_voice(m):
     phase = latest.get("state", {}).get("phase", "?")
     entry = summarize(m["text"], phase)
-    publish({"type": "log_entry", "id": uuid.uuid4().hex[:8], "status": "proposed",
-             "event": entry["event"], "detail": entry["detail"], "said": m["text"], "at": m["t"]})
+    publish({"type": "log_entry", "id": uuid.uuid4().hex[:8], "status": "proposed", "confirmed": False,
+             "event": entry["event"], "detail": entry["detail"], "llm": entry["llm"],
+             "said": m["text"], "at": m["t"]})
 
 
 def handle(m):
     if m["type"] == "log_entry":  # confirm/reject: merge into the stored entry
         with lock:
-            m = {**log[m["id"]], "status": m["status"], "src": m.get("src", "?"), "ts": m.get("ts")}
+            m = {**log[m["id"]], "status": m["status"], "confirmed": m["status"] == "confirmed",
+                 "src": m.get("src", "?"), "ts": m.get("ts")}
     publish(m)
     if m["type"] == "voice_event":
         threading.Thread(target=on_voice, args=(m,), daemon=True).start()
@@ -206,6 +228,19 @@ def lan_ip():
             return "127.0.0.1"
 
 
+def make_client():
+    """Load OPENAI_API_KEY from .env (real env vars win) or exit with a clear message. Never prints it."""
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text().splitlines():
+            k, sep, v = line.strip().partition("=")
+            if sep and not k.startswith("#"):
+                os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+    if not os.environ.get("OPENAI_API_KEY", "").strip() or os.environ["OPENAI_API_KEY"] == "your-key-here":
+        sys.exit(f"OPENAI_API_KEY is missing. Put OPENAI_API_KEY=<your key> in {ENV_FILE} "
+                 "(see .env.example) or export it, then start the hub again.")
+    return openai.OpenAI(timeout=20, max_retries=0)  # no retries: each one costs
+
+
 def make_server(port):
     publish({"type": "state", "phase": "check"})
     srv = ThreadingHTTPServer(("0.0.0.0", port), Handler)  # LAN so the phone can reach it
@@ -215,6 +250,7 @@ def make_server(port):
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    CLIENT = make_client()
     srv = make_server(port)
     print(f"Cadence hub on http://{lan_ip()}:{port}  (dashboard: http://localhost:{port})")
     srv.serve_forever()

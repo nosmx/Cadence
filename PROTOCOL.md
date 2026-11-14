@@ -44,7 +44,9 @@ The hub adds `t` (seconds since the hub started the session) to everything it re
 Text is already transcribed. The hub turns it into a proposed `log_entry`.
 
 **`log_entry`** (hub → glasses, dashboard; glasses → hub to confirm):
-`{"id": "a1b2c3", "status": "proposed", "event": "AED arrived", "detail": "Pads applied", "said": "AED arrived, pads on"}`
+`{"id": "a1b2c3", "status": "proposed", "confirmed": false, "event": "AED arrived", "detail": "Pads applied", "llm": true, "said": "AED arrived, pads on", "at": 84.2}`
+- `at`: session seconds when the note was spoken. `confirmed` stays `false` until the rescuer confirms.
+- `llm`: `false` means the LLM was unavailable and `event` is the raw text.
 - Hub creates it as `proposed`. Glasses show it; rescuer taps the ring.
 - Glasses reply `{"type": "log_entry", "id": "a1b2c3", "status": "confirmed"}` (or `rejected`). Only `id` and `status` are needed.
 - Dashboard shows confirmed entries in the timeline.

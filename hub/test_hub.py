@@ -48,11 +48,18 @@ for _ in range(50):
     if entries: break
     time.sleep(0.05)
 e = entries[0]
-assert e["status"] == "proposed" and e["event"] == "AED arrived" and e["said"] == "AED arrived"
+assert e["status"] == "proposed" and e["confirmed"] is False and e["llm"] is False
+assert e["event"] == "AED arrived" and e["said"] == "AED arrived" and e["at"] > 0
 assert post({"type": "log_entry", "id": "missing", "status": "confirmed"}) == 400
 assert post({"type": "log_entry", "id": e["id"], "status": "proposed"}) == 400
 assert post({"type": "log_entry", "id": e["id"], "status": "confirmed"}) == 200
 e2 = next(m for m in snap() if m["type"] == "log_entry")
-assert e2["status"] == "confirmed" and e2["event"] == "AED arrived"
+assert e2["status"] == "confirmed" and e2["confirmed"] is True and e2["event"] == "AED arrived"
+
+# rate limit: LLM_PER_MIN calls allowed, the next one refused
+hub.llm_calls.clear()
+assert all(hub.llm_allowed() for _ in range(hub.LLM_PER_MIN)) and not hub.llm_allowed()
+hub.llm_calls[:] = [time.time() - 61] * (hub.LLM_PER_RUN - 1)  # old calls: minute window is clear
+assert hub.llm_allowed() and not hub.llm_allowed()  # ...but the per-run cap is reached
 
 print("ok")
