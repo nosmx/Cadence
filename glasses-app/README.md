@@ -83,6 +83,21 @@ npm run qr
 
 Scan the QR code from the Even app's developer (sideload) mode. The phone screen shows the mock control panel; the glasses show the UI.
 
+## Upload to the Even Hub portal
+
+Uses the Even Hub CLI (installed as a dev dependency, so run it with `npx evenhub`).
+
+1. Log in once (interactive): `npx evenhub login`
+2. Check your account and namespace: `npx evenhub self-check`. If your namespace requires it, change `package_id` in `app.json` to match.
+3. Build and package: `npm run pack` (creates `cpr-coach.ehpk`). If you ran `fetch-model`, the 40 MB speech model is included.
+4. Create the app with its first build: `npx evenhub create cpr-coach.ehpk --name "CPR Coach" --tagline "CPR training coach - not a medical device"`. Add `--icon icon.png` for a real icon (24x24, see the CLI's icon rules); otherwise it gets a placeholder.
+5. Put it on the beta channel: `npx evenhub promote 0.1.0 --to beta`
+6. Invite yourself and teammates: `npx evenhub testers add you@example.com`, accept the email invite, then install it from the Even app.
+
+New version later: bump `version` in `app.json`, then `npm run pack`, `npx evenhub upload cpr-coach.ehpk -m "what changed"`, and `npx evenhub promote <version> --to beta`.
+
+For day-to-day testing, `npm run qr` (dev mode) is faster: no packaging, and changes reload live.
+
 ## Connecting the real Arduino
 
 Load the app with `?ws=` pointing at the Arduino's WebSocket server, e.g. `http://localhost:5173/?ws=ws://192.168.4.1:81`. Then the mock panel hides and messages come from the Arduino.
