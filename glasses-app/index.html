@@ -43,7 +43,8 @@
         position: relative;
         background: #000;
         border-radius: 8px;
-        font: 19px/1.25 "DejaVu Sans Mono", Menlo, Consolas, monospace;
+        /* Size is calibrated at runtime to match G2 text widths (display/browser.ts); 27 px lines like the glasses. */
+        font: 20px/27px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         color: var(--g2);
         text-shadow: 0 0 4px rgba(61, 255, 122, 0.45);
         flex: none;

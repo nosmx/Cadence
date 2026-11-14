@@ -18,8 +18,8 @@ The app is **voice controlled** — the rescuer's hands stay on the chest:
 
 Touchpad / ring taps still work as a fallback; the screen only mentions them when voice isn't available (e.g. the speech model is missing), so the rescuer is never stuck.
 
-1. **Splash** — disclaimer. Say READY.
-2. **Set up (3 pages)** — how to kneel, where to put your hands, how to hold your body. Say READY for each page.
+1. **Splash** — app name, the steps, and the voice commands. Say READY.
+2. **Set up (3 pages)** — how to kneel, where to put your hands, how to hold your body, each with a picture of the position (same figure style as the compression animation). Say READY for each page.
 3. **Align hands** — hands-free: the Arduino says which way to move (toward head / feet / left / right), how far, and CLOSER / FARTHER. Holding on the spot for 1.5 s moves on by itself. If hand tracking is lost, say READY to continue anyway — a sensor never blocks CPR.
 4. **Ready** — say READY to start. If your hands drift off the spot for 1 s you go back to aligning.
 5. **Compress** — kept simple:
@@ -141,7 +141,7 @@ Before packaging, put the Arduino's address in `app.json` → `permissions[netwo
 | `src/sources/websocket.ts` | Real Arduino WebSocket client (auto-reconnect) |
 | `src/display/even.ts` | G2 rendering via Even Hub SDK (deduped, coalesced text updates) |
 | `src/display/browser.ts` | Approximate browser preview / phone mirror |
-| `src/display/frames.ts` | Pace circle + CPR figure frames (canvas-drawn PNGs) for the image containers |
+| `src/display/frames.ts` | Pace circle, CPR animation and set-up pictures (canvas-drawn PNGs) for the image containers |
 | `src/beeper.ts` | Phone beep on every beat (Web Audio, scheduled ahead) |
 | `src/layout.test.ts` | Checks all screen text fits, using Even's G2 font metrics |
 | `src/voice/commands.ts` | Voice commands (READY / BACK / STOP) |

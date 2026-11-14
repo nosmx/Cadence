@@ -291,8 +291,10 @@ export class CoachApp {
       this.layout = page.layout;
       void this.display.show(page);
     } else {
-      // Images (circle, figure) are driven by the beat timer, not by data renders.
       for (const b of page.boxes) void this.display.update(b.name, b.content);
+      // On the compression screen the beat timer drives the images; elsewhere
+      // (set-up pictures) follow the page.
+      if (page.layout !== 'compress') for (const im of page.images ?? []) void this.display.setImage(im.name, im.frame);
     }
   }
 }

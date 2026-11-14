@@ -17,7 +17,7 @@ import {
   type PlacementView,
 } from './coach';
 import { SCREEN_H, type Page, type TextBox } from './display/types';
-import { DISCLAIMER, SETUP_PAGES, TARGETS } from './guidance';
+import { SETUP_PAGES, TARGETS } from './guidance';
 import type { SourceStatus } from './sources/types';
 import type { VoiceStatus } from './voice/commands';
 
@@ -39,7 +39,7 @@ export function splashScreen(voice: VoiceStatus): Page {
     layout: 'splash',
     boxes: [
       cue('CPR COACH', 0, 56),
-      { name: 'body', x: 0, y: 72, w: W, h: 150, content: `${DISCLAIMER}\n\nControlled by voice: READY, BACK, STOP` },
+      { name: 'body', x: 0, y: 72, w: W, h: 150, content: 'Set up  >  align hands  >  compress\n\nControlled by voice: READY, BACK, STOP' },
       footer(sayReady(voice, 'to begin')),
     ],
   };
@@ -52,9 +52,11 @@ export function setupScreen(index: number, voice: VoiceStatus): Page {
     layout: 'setup',
     boxes: [
       header(`SET UP  ${index + 1}/${SETUP_PAGES.length}  -  ${p.title}`),
-      { name: 'body', x: 0, y: 56, w: W, h: 168, content: p.body, border: 2 },
+      { name: 'body', x: 0, y: 56, w: 280, h: 176, content: p.body, border: 2 },
       footer(sayReady(voice, last ? 'to align hands' : 'for next')),
     ],
+    // Picture of the step; same layout for all 3 pages, so paging only swaps the image.
+    images: [{ name: 'figure', x: 288, y: 72, w: 288, h: 144, frame: p.frame }],
   };
 }
 

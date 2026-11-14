@@ -50,8 +50,12 @@ describe('CoachApp flow', () => {
     expect(display.text.get('footer')).toBe('Say "READY" to begin');
     app.command('ready');
     expect(app.phase).toBe('setup');
+    // Each set-up step shows its own picture.
+    expect(display.pages[display.pages.length - 1].images![0].frame).toBe('setup-kneel');
     app.command('ready');
+    expect(display.figure[display.figure.length - 1]).toBe('setup-hands');
     app.command('back');
+    expect(display.figure[display.figure.length - 1]).toBe('setup-kneel');
     app.command('ready');
     app.command('ready');
     app.command('ready');

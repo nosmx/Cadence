@@ -17,25 +17,30 @@ export const TARGETS = {
   depthMaxCm: 6,
   /** Suggested time before swapping compressors. */
   swapSeconds: 120,
-  /** Pace of the flashing dot - middle of the target rate range. */
+  /** Pace of the flashing circle and phone beep - middle of the target rate range. */
   metronomeBpm: 110,
 } as const;
 
-/** Body-positioning instructions shown before hand alignment. Keep lines short (~34 chars). */
-export const SETUP_PAGES: { title: string; body: string }[] = [
+/**
+ * Body-positioning instructions shown before hand alignment, each with a picture
+ * (frame key in display/frames.ts). Text sits in a ~264 px column next to the
+ * picture: max 5 lines; layout.test.ts checks it fits with the G2 font.
+ */
+export const SETUP_PAGES: { title: string; body: string; frame: string }[] = [
   {
     title: 'KNEEL',
-    body: "Kneel at the patient's side,\nclose to their chest.\nKnees about shoulder-width apart.",
+    body: 'Kneel beside the chest,\nclose to the patient.\nKnees shoulder-width apart.',
+    frame: 'setup-kneel',
   },
   {
     title: 'HANDS',
-    body: 'Heel of one hand on the center\nof the chest (lower breastbone).\nOther hand on top, fingers laced.',
+    body: 'Heel of one hand on the\ncenter of the chest,\nlower half of breastbone.\nOther hand on top,\nfingers laced.',
+    frame: 'setup-hands',
   },
   {
     title: 'BODY',
-    body: 'Shoulders straight over hands.\nArms straight, elbows locked.\nPush down with your body weight.',
+    body: 'Shoulders straight\nover your hands.\nArms straight, elbows locked.\nPush with your body weight.',
+    frame: 'setup-body',
   },
 ];
 
-export const DISCLAIMER =
-  'TRAINING TOOL - NOT A MEDICAL DEVICE\nPractice on a manikin or pillow only.';

@@ -24,6 +24,23 @@ export class BrowserDisplay implements Display {
     this.errorEl = document.createElement('div');
     this.errorEl.className = 'g2-error';
     host.append(this.screen, this.errorEl);
+    this.calibrateFont();
+  }
+
+  /**
+   * Scale the preview font so text is as wide as on the glasses. The sample's
+   * width in the G2 firmware font (915 px) was measured with @evenrealities/pretext.
+   * Line height is the G2's fixed 27 px (set in index.html).
+   */
+  private calibrateFont(): void {
+    const SAMPLE = 'The quick brown fox jumps over the lazy dog. PACK MY BOX WITH FIVE DOZEN LIQUOR JUGS 0123456789';
+    const G2_WIDTH = 915;
+    const ctx = document.createElement('canvas').getContext('2d');
+    if (!ctx) return;
+    const family = getComputedStyle(this.screen).fontFamily;
+    ctx.font = `20px ${family}`;
+    const measured = ctx.measureText(SAMPLE).width;
+    if (measured > 0) this.screen.style.fontSize = `${((20 * G2_WIDTH) / measured).toFixed(2)}px`;
   }
 
   async show(page: Page): Promise<void> {
