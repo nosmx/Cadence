@@ -38,6 +38,8 @@ class Anchor:
         self.want_name, self.addr = name.lower(), addr and addr.upper()
         self.near, self.hyst, self.alpha, self.trend_db, self.trend_s = near_dbm, hyst_db, alpha, trend_db, trend_s
         self.ema = None
+        self.raw = None  # last reading, unsmoothed
+        self.found_name = None  # the name the band advertises, once seen
         self.on = False
         self.last_at = 0.0
         self.history = []  # (time, ema) for the trend
@@ -47,10 +49,13 @@ class Anchor:
         if not p:
             return
         kind, addr, val = p
+        if kind == "name" and addr == self.addr:
+            self.found_name = val
         if kind == "name" and self.addr is None and val.lower() == self.want_name:
-            self.addr = addr
+            self.addr, self.found_name = addr, val
             print(f"[anchor] band found: {val} {addr}", file=sys.stderr)
         elif kind == "rssi" and addr == self.addr:
+            self.raw = val
             self.ema = val if self.ema is None else self.alpha * val + (1 - self.alpha) * self.ema
             self.last_at = now
             # hysteresis: a reading hovering at the threshold must not flicker on/off
@@ -66,7 +71,8 @@ class Anchor:
             trend = "closer" if d > self.trend_db else "farther" if d < -self.trend_db else "steady"
         return {"type": "placement", "source": "anchor", "ts": int(time.time() * 1000),
                 "on_target": bool(self.on and signal > 0), "distance_cm": None, "direction": None,
-                "signal": round(signal, 2), "trend": trend, "rssi_dbm": None if self.ema is None else round(self.ema, 1)}
+                "signal": round(signal, 2), "trend": trend, "rssi_dbm": None if self.ema is None else round(self.ema, 1),
+                "band": self.addr, "band_name": self.found_name, "rssi_raw": self.raw, "age_s": None if self.ema is None else round(age, 1)}
 
 
 def scan_lines():

@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPR Band Distance</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1c1c1a; --muted: #6b6a66; --line: #e4e2dc;
+    --accent: #2f6fdf; --raw: #9fb8e8; --good: #1f8a4c; --warn: #b26a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121211; --card: #1c1c1b; --ink: #f0efea; --muted: #9a9890; --line: #2e2d2a;
+            --accent: #7aa7ff; --raw: #3d5585; --good: #4cc27f; --warn: #e0a243; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 14px; }
+  .big { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  #dist { font-size: clamp(56px, 16vw, 96px); font-weight: 700; letter-spacing: -0.03em;
+          font-variant-numeric: tabular-nums; line-height: 1; }
+  #unit { font-size: 22px; color: var(--muted); }
+  #trend { font-size: 20px; font-weight: 600; }
+  .meter { height: 10px; background: var(--line); border-radius: 99px; overflow: hidden; margin: 18px 0 6px; }
+  .meter > div { height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .25s; }
+  .ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .stats b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .stats span { color: var(--muted); font-size: 13px; }
+  canvas { width: 100%; height: 200px; display: block; }
+  .legend { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin: 0 4px 0 10px; vertical-align: -1px; }
+  button { font: inherit; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line);
+           background: var(--card); color: var(--ink); cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  #state { font-weight: 600; }
+  .ok { color: var(--good); } .bad { color: var(--warn); }
+  .note { color: var(--muted); font-size: 13px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CPR · band 27 ↔ UNO Q</h1>
+  <p class="sub">Live from the UNO Q's Bluetooth signal. Move the band away: the number should go up. <span id="state">Connecting…</span></p>
+
+  <div class="card">
+    <div class="big"><span id="dist">–</span><span id="unit">cm</span><span id="trend"></span></div>
+    <div class="meter"><div id="bar"></div></div>
+    <div class="ends"><span>on the board</span><span>2 m+</span></div>
+  </div>
+
+  <div class="card stats">
+    <div style="grid-column: 1 / -1"><b id="band">–</b><span>band the UNO Q is listening to</span></div>
+    <div><b id="ema">–</b><span>signal, smoothed (dBm)</span></div>
+    <div><b id="raw">–</b><span>last reading (dBm)</span></div>
+    <div><b id="age">–</b><span>since last reading</span></div>
+  </div>
+
+  <div class="card">
+    <canvas id="chart"></canvas>
+    <div class="legend">last 60 s, higher = closer <i style="background:var(--raw)"></i>each reading <i style="background:var(--accent)"></i>smoothed</div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <button id="caltouch">Band is touching the board now</button>
+      <button id="cal">Band is 1 m away now</button>
+      <span class="note" id="calnote"></span>
+    </div>
+    <p class="note">Distance is an estimate from signal strength (stronger = closer), not a measurement.
+      Calibrate once: band touching the board, press the first button; band 1 m away, press the second.
+      The band is only heard while nothing else (laptop, dashboard tab) is connected to it.</p>
+  </div>
+</main>
+<script>
+// ponytail: log-distance model d = 10^((A - rssi) / 10n). Touching (3 cm) + 1 m readings fit A and n;
+// with one of them n = 2 (free space). Indoors n is 2-3 and the body absorbs signal, so it stays an estimate.
+const TOUCH_M = 0.03;
+const cal = { touch: null, one: null };
+try { Object.assign(cal, JSON.parse(localStorage.getItem("cal") || "{}")); } catch (e) {}
+const $ = (id) => document.getElementById(id);
+const points = [];          // {t, raw, ema}
+let last = null, lastAt = 0, lastRaw = null;
+
+function model() {
+  const span = 10 * Math.log10(1 / TOUCH_M);          // dB between 3 cm and 1 m when n = 1
+  if (cal.touch != null && cal.one != null && cal.touch - cal.one > span * 0.5)
+    return { A: cal.one, n: (cal.touch - cal.one) / span };
+  if (cal.touch != null) return { A: cal.touch - 2 * span, n: 2 };
+  return { A: cal.one ?? -70, n: 2 };
+}
+function distanceCm(dbm) { const { A, n } = model(); return 100 * Math.pow(10, (A - dbm) / (10 * n)); }
+function showCal() {
+  const f = (v) => v == null ? "not set" : v.toFixed(1) + " dBm";
+  $("calnote").textContent = `touching = ${f(cal.touch)} · 1 m = ${f(cal.one)} · n = ${model().n.toFixed(2)}`;
+}
+showCal();
+
+function setCal(key) {
+  if (!last || last.rssi_dbm == null) return;
+  cal[key] = last.rssi_dbm;
+  try { localStorage.setItem("cal", JSON.stringify(cal)); } catch (e) {}
+  showCal(); render();
+}
+$("caltouch").onclick = () => setCal("touch");
+$("cal").onclick = () => setCal("one");
+
+const es = new EventSource("/events");
+es.onopen = () => setState("Waiting for the UNO Q…", false);
+es.onerror = () => setState("Hub not reachable", false);
+es.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.type !== "placement" || !("rssi_dbm" in m)) return;   // only the UNO Q anchor sends rssi_dbm
+  last = m; lastAt = Date.now();
+  if (m.rssi_raw != null && (m.rssi_raw !== lastRaw || (m.age_s ?? 9) < 0.25)) {
+    points.push({ t: Date.now(), raw: m.rssi_raw, ema: m.rssi_dbm });
+    lastRaw = m.rssi_raw;
+  }
+  render();
+};
+
+function setState(text, ok) { $("state").textContent = text; $("state").className = ok ? "ok" : "bad"; }
+
+function render() {
+  if (!last) return;
+  if (last.rssi_dbm == null) {
+    setState("UNO Q running, can't hear band 27: is it connected to the laptop or asleep? Double-tap it.", false);
+    return;
+  }
+  const stale = (last.age_s ?? 99) > 5 || Date.now() - lastAt > 3000;
+  setState(stale ? "No fresh reading: is the band connected to something else?" : "Live", !stale);
+  const cm = distanceCm(last.rssi_dbm);
+  $("dist").textContent = cm >= 1000 ? "10+" : cm >= 100 ? (cm / 100).toFixed(1) : Math.round(cm);
+  $("unit").textContent = cm >= 100 ? "m" : "cm";
+  $("trend").textContent = { closer: "↓ closer", farther: "↑ farther", steady: "steady" }[last.trend] || "";
+  $("bar").style.width = Math.min(100, cm / 2) + "%";
+  $("band").textContent = last.band === "C1:3F:B9:F4:08:66"
+    ? `✓ Band 27 (${last.band_name || "Vexo-HACK-27"})` : `✗ not band 27: ${last.band_name || ""} ${last.band || "searching"}`;
+  $("band").className = last.band === "C1:3F:B9:F4:08:66" ? "ok" : "bad";
+  $("ema").textContent = last.rssi_dbm.toFixed(1);
+  $("raw").textContent = last.rssi_raw ?? "–";
+  $("age").textContent = last.age_s == null ? "–" : last.age_s.toFixed(1) + " s";
+}
+
+function draw() {
+  const c = $("chart"), dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement);
+  const now = Date.now(), lo = -105, hi = -35;
+  while (points.length && now - points[0].t > 60000) points.shift();
+  const x = (t) => w - (now - t) / 60000 * w, y = (v) => h - (v - lo) / (hi - lo) * h;
+  g.strokeStyle = css.getPropertyValue("--line"); g.fillStyle = css.getPropertyValue("--muted");
+  g.font = "11px sans-serif"; g.lineWidth = 1;
+  for (let v = -100; v <= -40; v += 20) {
+    g.beginPath(); g.moveTo(0, y(v)); g.lineTo(w, y(v)); g.stroke(); g.fillText(v + " dBm", 4, y(v) - 3);
+  }
+  g.fillStyle = css.getPropertyValue("--raw");
+  for (const p of points) { g.beginPath(); g.arc(x(p.t), y(p.raw), 3, 0, 7); g.fill(); }
+  g.strokeStyle = css.getPropertyValue("--accent"); g.lineWidth = 2.5; g.beginPath();
+  points.forEach((p, i) => i ? g.lineTo(x(p.t), y(p.ema)) : g.moveTo(x(p.t), y(p.ema)));
+  g.stroke();
+  render();
+}
+setInterval(draw, 250); draw();
+</script>
+</body>
+</html>

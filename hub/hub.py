@@ -34,6 +34,7 @@ WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MODEL = "gpt-5-mini"
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DASHBOARD = Path(__file__).with_name("dashboard.html")
+DISTANCE = Path(__file__).with_name("distance.html")  # live band <-> UNO Q signal page
 
 CLIENT = None  # set by make_client() at startup; tests leave it None (raw-text entries)
 # Spend caps. Over a cap the note is still logged, as raw text (llm: false).
@@ -201,6 +202,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/":
             self._head(200, "text/html; charset=utf-8")
             self.wfile.write(DASHBOARD.read_bytes())
+        elif self.path in ("/cpr", "/distance"):
+            self._head(200, "text/html; charset=utf-8")
+            self.wfile.write(DISTANCE.read_bytes())
         elif self.path == "/snapshot":
             self._json(200, snapshot())
         elif self.path == "/events":
