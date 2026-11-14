@@ -37,6 +37,10 @@ CHEST_FRESH_S = 0.5             # spec: Arduino data older than this is not used
 CHEST_MIN_READINGS = 4          # GUESSED: readings needed inside one cycle to trust its peak-to-peak
 CHEST_COMPRESSED_IS_SMALLER = True   # GUESSED: pushing down makes the measured distance smaller
 RECOIL_TOLERANCE_CM = 0.5       # GUESSED ("a few millimetres"): release must come this close to rest
+SPOT_PRESS_CM = 0.5             # GUESSED: chest pressed this far below rest at the Arduino = hands on the spot
+SPOT_HOLD_S = 1.5               # GUESSED: stay "on spot" this long after the last press (between pushes)
+SPOT_REST_WINDOW_S = 10.0       # the rest level is the least-pressed reading in this window
+PLACEMENT_HZ = 5                # placement messages per second (the glasses call it lost after 1.5 s)
 REST_MIN_READINGS = 5           # GUESSED: readings needed (while hands are off) to learn the rest distance
 REST_WINDOW = 25                # GUESSED: the rest distance is learnt from this many readings that hold still
 SCALE_WINDOW = 15               # GUESSED: running median over this many compressions (slow)

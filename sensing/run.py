@@ -94,6 +94,8 @@ def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, sec
     clock = ClockMap()
     started = time.monotonic()
     next_beat = started
+    next_place = started
+    spot = chest_input.SpotDetector()
     samples_seen = 0
     while not source.finished:
         now = time.monotonic()
@@ -104,6 +106,7 @@ def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, sec
             clock.see(s.t / 1000.0, s.host)
         if chest is not None:
             for distance, host in chest.drain():
+                spot.add(distance, now)
                 if recorder:
                     recorder.chest(host, distance)
                 t_band = clock.to_band(host)
@@ -127,6 +130,9 @@ def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, sec
         message = pipeline.update_status(source.connected, reconnecting, source.battery_percent)
         if message:
             publisher.publish(message)
+        if spot.fresh(now) and now >= next_place:   # stale Arduino: send nothing, the glasses show "lost"
+            next_place = now + 1.0 / config.PLACEMENT_HZ
+            publisher.publish(messages.placement(spot.on_target(now), spot.press_cm()))
         if now >= next_beat:
             next_beat = max(next_beat + config.HEARTBEAT_S, now)
             publisher.publish(pipeline.heartbeat())

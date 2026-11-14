@@ -21,13 +21,15 @@ CORS is open (`*`).
 |---|---|---|
 | `type` | string | One of the types below. |
 | `ts` | number | Sender clock, Unix milliseconds. |
-| `source` | string | `band`, `anchor`, `glasses`, `hub`, `dashboard`, `fake`. |
+| `source` | string | `band`, `arduino`, `anchor`, `glasses`, `hub`, `dashboard`, `fake`. |
 
 The hub adds `t` (seconds since the hub started the session) to everything it rebroadcasts.
 
 ## Types
 
-**`placement`** (UNO Q anchor → hub → glasses): where the rescuer's hands are relative to the spot.
+**`placement`** (band laptop's Arduino reading → hub → glasses): are the rescuer's hands on the spot.
+Sent by `sensing.run --arduino ...` 5×/s while the Arduino is fresh: `on_target` = the chest above the Arduino is pressed at least 0.5 cm below rest (held 1.5 s between pushes); `distance_cm`, `direction`, `trend` are `null`; extra `press_cm`. Arduino quiet = nothing sent, the glasses show lost.
+The UNO Q Bluetooth anchor (`hub/anchor.py`) can send it too, but its signal was measured too noisy to use.
 `{"on_target": false, "distance_cm": 6.2, "direction": "head", "signal": 0.8}`
 - `distance_cm`: number or `null` if unknown. `direction`: `head` | `feet` | `left` | `right` | `null`.
 - `trend` (optional): `closer` | `farther` | `steady` | `null`, for an anchor that senses direction of change but not centimetres (the UNO Q's Bluetooth signal strength). The glasses use it when `distance_cm` is `null`.

@@ -11,6 +11,7 @@ label, which can also be "lighter" (= softer) or "release fully".
   compression  one per detected compression
   heartbeat    once a second: the latest compression fields again, plus the status fields
   status       sent when connected / reconnecting / paused / arduino_ok / battery changes
+  placement    5/s while the Arduino is fresh: are the hands pressing on the spot above it
 """
 import time
 from datetime import datetime, timezone
@@ -19,6 +20,7 @@ SOURCE = "band"
 TYPE_COMPRESSION = "compression"
 TYPE_STATUS = "status"
 TYPE_HEARTBEAT = "heartbeat"
+TYPE_PLACEMENT = "placement"
 
 QUALITY_LABELS = ("good", "faster", "slower", "harder", "lighter", "release fully")    # quality_full
 HUB_QUALITIES = ("good", "harder", "softer", "faster", "slower")                       # quality
@@ -120,4 +122,13 @@ def heartbeat(t_band_ms, state, status_state):
     msg = _base(TYPE_HEARTBEAT, t_band_ms)
     msg.update(_compression_fields(state))
     msg.update(_status_fields(status_state))
+    return msg
+
+
+def placement(on_target, press_cm):
+    """Hands on the spot = the Arduino under the chest sees it pressed (chest_input.SpotDetector).
+    The Arduino cannot tell how far or which way the hands are, so those are null."""
+    msg = _base(TYPE_PLACEMENT, None)
+    msg.update({"on_target": bool(on_target), "distance_cm": None, "direction": None, "signal": 1.0,
+                "trend": None, "press_cm": _round(press_cm, 2), "src": "arduino", "source": "arduino"})
     return msg

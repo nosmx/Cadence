@@ -156,10 +156,9 @@ class _Worker:
 
 
 class HttpPostOutput:
-    """The team's hub (POST /msg) answers 400 to message types it does not know, so by
-    default only "compression" messages are posted."""
+    """By default only "compression" and "placement" are posted (--post-all: every type)."""
 
-    def __init__(self, url, types=("compression",)):
+    def __init__(self, url, types=("compression", "placement")):
         self.url = url
         self.types = types
         self._worker = _Worker("post", self._post, config.POST_QUEUE)
@@ -210,7 +209,7 @@ class Publisher:
             self.ws = WebSocketOutput(port=ws_port, on_message=on_message).start()
             self._outputs.append(self.ws)
         if post_url:
-            self._outputs.append(HttpPostOutput(post_url, types=None if post_all else ("compression",)))
+            self._outputs.append(HttpPostOutput(post_url, types=None if post_all else ("compression", "placement")))
         if serial_out is not None:
             self._outputs.append(SerialOutput(serial_out))
 

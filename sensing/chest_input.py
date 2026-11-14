@@ -20,6 +20,8 @@ import threading
 import time
 from collections import deque
 
+from . import config
+
 MESSAGE_TYPE = "chest"
 # field name -> factor that turns its value into centimetres
 DISTANCE_FIELDS = (("distance_cm", 1.0), ("distance", 1.0), ("cm", 1.0), ("d", 1.0),
@@ -234,3 +236,35 @@ def from_spec(spec):
         port, _, baud = rest.partition(":")
         return SerialChestInput(port, int(baud) if baud else SERIAL_BAUD), False
     raise SystemExit('--arduino: write serial:COM5, ws, http, or poll:http://ADDRESS/PATH (got "%s").' % spec)
+
+
+class SpotDetector:
+    """Arduino distances -> are the hands pressing on the spot right above it?
+    On when the chest is pressed SPOT_PRESS_CM below its rest level; stays on SPOT_HOLD_S
+    after the last press so it does not flicker between pushes.
+    ponytail: rest = least-pressed reading of the last SPOT_REST_WINDOW_S, so leaning still
+    for longer than that window reads as rest again. Fine for "place hands, then push"."""
+
+    def __init__(self):
+        self.readings = deque()     # (time, distance_cm)
+        self.on_until = 0.0
+
+    def add(self, distance_cm, now):
+        self.readings.append((now, distance_cm))
+        while self.readings[0][0] < now - config.SPOT_REST_WINDOW_S:
+            self.readings.popleft()
+        if self.press_cm() >= config.SPOT_PRESS_CM:
+            self.on_until = now + config.SPOT_HOLD_S
+
+    def press_cm(self):
+        """How far the chest is pressed now, in cm (0 = at rest)."""
+        ds = [d for _, d in self.readings]
+        if config.CHEST_COMPRESSED_IS_SMALLER:
+            return max(ds) - ds[-1]
+        return ds[-1] - min(ds)
+
+    def fresh(self, now):
+        return bool(self.readings) and now - self.readings[-1][0] < config.CHEST_FRESH_S
+
+    def on_target(self, now):
+        return now < self.on_until
