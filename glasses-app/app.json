@@ -14,7 +14,7 @@
     },
     {
       "name": "g2-microphone",
-      "desc": "Listens for the spoken command \"ready\" to start compressions."
+      "desc": "Listens for the spoken commands \"ready\", \"back\" and \"stop\" so the rescuer can keep both hands on the chest."
     }
   ],
   "supported_languages": ["en"]

@@ -1,20 +1,28 @@
 /**
  * CPR Coach glasses app: phase state machine + render loop.
  *
- * Flow: splash -> setup (body positioning, 3 pages) -> align (Arduino hand tracking)
- *       -> ready (say "READY" or tap) -> compress (live bracelet feedback) -> summary.
+ * Flow: splash -> setup (body positioning, 3 pages) -> align (Arduino hand tracking,
+ *       advances by itself) -> ready -> compress (pace dot + live bracelet feedback)
+ *       -> summary.
+ *
+ * Control is by voice so the rescuer never lifts their hands:
+ *   "READY" = next / start, "BACK" = previous, "STOP" = end compressions.
+ * Taps still work as a fallback (shown on screen only when voice is unavailable).
  *
  * Rules:
- * - A sensor never blocks CPR: if hand tracking is lost you can tap past it.
+ * - A sensor never blocks CPR: if hand tracking is lost you can continue anyway.
  * - Stale or low-confidence data is shown as "--" with a warning, never as a number.
  */
-import { band, evaluateCompressions, evaluatePlacement, LIMITS, type PlacementView } from './coach';
+import { band, directionText, evaluateCompressions, evaluatePlacement, LIMITS, type PlacementView } from './coach';
 import type { Display, Page } from './display/types';
 import { SETUP_PAGES, TARGETS } from './guidance';
 import type { CompressionMsg, InboundMsg, OutboundMsg, PlacementMsg } from './protocol';
 import {
   alignScreen,
   compressScreen,
+  DOT,
+  DOT_BRIGHT,
+  DOT_DIM,
   readyScreen,
   setupScreen,
   splashScreen,
@@ -22,15 +30,21 @@ import {
   type Summary,
 } from './screens';
 import type { MessageSource } from './sources/types';
+import type { Command, VoiceStatus } from './voice/commands';
 
 export type Phase = 'splash' | 'setup' | 'align' | 'ready' | 'compress' | 'summary';
+/** Touchpad / ring gestures (fallback controls). */
 export type Input = 'tap' | 'double' | 'up' | 'down';
+type Action = 'next' | 'back' | 'end';
 
 /** Off target this long while on the ready screen => go back to aligning. */
 const READY_DRIFT_MS = 1000;
+/** Fraction of each beat the dot is bright. */
+const BEAT_ON_FRACTION = 0.4;
 
 export class CoachApp {
   phase: Phase = 'splash';
+  voiceStatus: VoiceStatus = 'off';
   private setupIndex = 0;
 
   private placement?: PlacementMsg;
@@ -45,6 +59,7 @@ export class CoachApp {
   private startedAt = 0;
   private stats = { confident: 0, rateOk: 0, depthOk: 0 };
   private summary?: Summary;
+  private beatTimer?: ReturnType<typeof setInterval>;
 
   private layout = '';
   private listeners: ((phase: Phase) => void)[] = [];
@@ -66,57 +81,66 @@ export class CoachApp {
     this.listeners.push(cb);
   }
 
-  handleInput(input: Input): void {
-    switch (this.phase) {
-      case 'splash':
-        if (input === 'tap') this.go('setup');
-        break;
-      case 'setup':
-        if (input === 'tap' || input === 'down') {
-          if (this.setupIndex < SETUP_PAGES.length - 1) this.setupIndex++;
-          else if (input === 'tap') this.go('align');
-        } else if (input === 'up') {
-          if (this.setupIndex > 0) this.setupIndex--;
-          else this.go('splash');
-        } else if (input === 'double') this.go('splash');
-        break;
-      case 'align': {
-        const v = this.placementView();
-        // Tap confirms when on target, or skips when tracking is unavailable.
-        if (input === 'tap' && v.status !== 'off_target') this.confirmHands();
-        else if (input === 'up' || input === 'double') this.go('setup', SETUP_PAGES.length - 1);
-        break;
-      }
-      case 'ready':
-        if (input === 'tap') this.startCompressions('tap');
-        else if (input === 'up' || input === 'double') this.go('align');
-        break;
-      case 'compress':
-        if (input === 'double') this.endSession();
-        break;
-      case 'summary':
-        if (input === 'tap') this.go('align');
-        else if (input === 'double') this.go('splash');
-        break;
-    }
+  setVoiceStatus(s: VoiceStatus): void {
+    this.voiceStatus = s;
     this.render();
   }
 
-  /** A recognized spoken phrase (from speech-to-text, or the mock panel). */
-  voice(phrase: string): void {
-    const p = phrase.trim().toLowerCase();
-    this.send({ type: 'voice_event', ts: this.now(), source: 'glasses', phrase: p });
-    if (this.phase === 'ready' && /\bready\b/.test(p)) this.startCompressions('voice');
-    this.render();
+  /** A recognized voice command (from speech recognition or the mock panel). */
+  command(cmd: Command, heard: string = cmd): void {
+    this.send({ type: 'voice_event', ts: this.now(), source: 'glasses', phrase: heard });
+    this.act(cmd === 'ready' ? 'next' : cmd === 'back' ? 'back' : 'end');
+  }
+
+  /** Touchpad / ring fallback. */
+  handleInput(input: Input): void {
+    if (input === 'tap' || input === 'down') this.act('next');
+    else if (input === 'up') this.act('back');
+    else this.act('end');
   }
 
   // ---------------------------------------------------------------------------
 
+  private act(action: Action): void {
+    switch (this.phase) {
+      case 'splash':
+        if (action === 'next') this.go('setup');
+        break;
+      case 'setup':
+        if (action === 'next') {
+          if (this.setupIndex < SETUP_PAGES.length - 1) this.setupIndex++;
+          else this.go('align');
+        } else if (action === 'back') {
+          if (this.setupIndex > 0) this.setupIndex--;
+          else this.go('splash');
+        }
+        break;
+      case 'align':
+        // Alignment completes by itself. "READY" confirms early when on target,
+        // or continues without tracking when the Arduino isn't giving a position.
+        if (action === 'next' && this.placementView().status !== 'off_target') this.confirmHands();
+        else if (action === 'back') this.go('setup', SETUP_PAGES.length - 1);
+        break;
+      case 'ready':
+        if (action === 'next') this.startCompressions();
+        else if (action === 'back') this.go('align');
+        break;
+      case 'compress':
+        if (action === 'end') this.endSession();
+        break;
+      case 'summary':
+        if (action === 'next') this.go('align');
+        else if (action === 'back') this.go('splash');
+        break;
+    }
+    this.render();
+  }
+
   private go(phase: Phase, setupIndex = 0): void {
     if (phase === 'setup') this.setupIndex = setupIndex;
-    if (phase === 'align') {
-      this.onTargetSince = undefined;
-    }
+    if (phase === 'align') this.onTargetSince = undefined;
+    if (phase === 'compress') this.startBeat();
+    else this.stopBeat();
     this.phase = phase;
     for (const cb of this.listeners) cb(phase);
   }
@@ -131,26 +155,48 @@ export class CoachApp {
     this.go('ready');
   }
 
-  private startCompressions(via: 'voice' | 'tap'): void {
+  private startCompressions(): void {
     this.compressions = [];
     this.compressionAt = undefined;
     this.count = 0;
     this.stats = { confident: 0, rateOk: 0, depthOk: 0 };
     this.startedAt = this.now();
     this.send({ type: 'confirm', ts: this.now(), source: 'glasses', what: 'start_compressions' });
-    console.log(`[app] compressions started via ${via}`);
     this.go('compress');
   }
 
   private endSession(): void {
     this.send({ type: 'confirm', ts: this.now(), source: 'glasses', what: 'end_session' });
-    this.summary = {
-      count: this.count,
-      durationS: (this.now() - this.startedAt) / 1000,
-      ...this.stats,
-    };
+    this.summary = { count: this.count, durationS: (this.now() - this.startedAt) / 1000, ...this.stats };
     this.go('summary');
   }
+
+  // --- Pace dot ----------------------------------------------------------------
+
+  /** Is the dot bright right now? Derived from the clock, so it never drifts. */
+  private beatOn(): boolean {
+    const beatMs = 60000 / TARGETS.metronomeBpm;
+    return ((this.now() - this.startedAt) % beatMs) / beatMs < BEAT_ON_FRACTION;
+  }
+
+  private startBeat(): void {
+    this.stopBeat();
+    let last: boolean | undefined;
+    // Poll fast but only send when the state flips (~2 updates per beat).
+    this.beatTimer = setInterval(() => {
+      const on = this.beatOn();
+      if (on === last) return;
+      last = on;
+      void this.display.update('dot', DOT, on ? DOT_BRIGHT : DOT_DIM);
+    }, 20);
+  }
+
+  private stopBeat(): void {
+    clearInterval(this.beatTimer);
+    this.beatTimer = undefined;
+  }
+
+  // --- Sensor data --------------------------------------------------------------
 
   private onMessage(m: InboundMsg): void {
     const now = this.now();
@@ -199,28 +245,30 @@ export class CoachApp {
   private page(): Page {
     const now = this.now();
     const src = this.source.status;
+    const voice = this.voiceStatus;
     switch (this.phase) {
       case 'splash':
-        return splashScreen();
+        return splashScreen(voice);
       case 'setup':
-        return setupScreen(this.setupIndex);
+        return setupScreen(this.setupIndex, voice);
       case 'align':
-        return alignScreen(this.placementView(), this.onTargetSince ? now - this.onTargetSince : 0, src);
+        return alignScreen(this.placementView(), this.onTargetSince ? now - this.onTargetSince : 0, src, voice);
       case 'ready':
-        return readyScreen(this.placementView(), src);
+        return readyScreen(this.placementView(), src, voice);
       case 'compress': {
         const pv = this.placementView();
-        const drift = pv.status === 'off_target' && pv.msg?.direction ? `move toward ${pv.msg.direction}` : undefined;
         return compressScreen({
           view: evaluateCompressions(this.compressions, this.compressionAt, now),
           count: this.count,
           elapsedS: (now - this.startedAt) / 1000,
           src,
-          handsDrift: drift,
+          voice,
+          beatOn: this.beatOn(),
+          handsDrift: pv.status === 'off_target' ? directionText(pv.msg?.direction ?? null) : undefined,
         });
       }
       case 'summary':
-        return summaryScreen(this.summary!);
+        return summaryScreen(this.summary!, voice);
     }
   }
 
@@ -230,7 +278,8 @@ export class CoachApp {
       this.layout = page.layout;
       void this.display.show(page);
     } else {
-      for (const b of page.boxes) void this.display.update(b.name, b.content);
+      // The dot is driven by the beat timer, not by data renders.
+      for (const b of page.boxes) if (b.name !== 'dot') void this.display.update(b.name, b.content);
     }
   }
 }

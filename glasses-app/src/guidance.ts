@@ -17,6 +17,8 @@ export const TARGETS = {
   depthMaxCm: 6,
   /** Suggested time before swapping compressors. */
   swapSeconds: 120,
+  /** Pace of the flashing dot - middle of the target rate range. */
+  metronomeBpm: 110,
 } as const;
 
 /** Body-positioning instructions shown before hand alignment. Keep lines short (~34 chars). */

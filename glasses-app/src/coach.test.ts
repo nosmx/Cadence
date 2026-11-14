@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { evaluateCompressions, evaluatePlacement, gauge, LIMITS } from './coach';
+import { evaluateCompressions, evaluatePlacement, LIMITS } from './coach';
 import type { CompressionMsg, PlacementMsg } from './protocol';
 import { parseMessage } from './protocol';
-import { compressScreen } from './screens';
+import { compressAdvice, compressScreen } from './screens';
+import { parseCommand } from './voice/commands';
 import { validatePage } from './display/types';
 
 const comp = (ts: number, rate: number, depth: number, confidence = 0.9): CompressionMsg => ({
@@ -64,12 +65,26 @@ describe('parseMessage', () => {
 });
 
 describe('screens', () => {
+  const base = { count: 10, elapsedS: 30, src: 'connected' as const, voice: 'listening' as const, beatOn: true };
   it('compress screen fits G2 limits and hides numbers when lost', () => {
-    const page = compressScreen({ view: { status: 'lost' }, count: 10, elapsedS: 30, src: 'connected' });
+    const page = compressScreen({ ...base, view: { status: 'lost' } });
     expect(validatePage(page)).toBeNull();
-    expect(page.boxes.find((b) => b.name === 'rate')!.content).toContain('--');
+    expect(page.boxes.find((b) => b.name === 'nums')!.content).toContain('--');
+    expect(page.boxes.find((b) => b.name === 'cue')!.content).toContain('NO BRACELET DATA');
   });
-  it('gauge marks the value and target zone', () => {
-    expect(gauge(110, 60, 160, 100, 120, 11)).toBe('....[#]....');
+  it('gives one instruction at a time: rate before depth', () => {
+    const view = { status: 'ok' as const, rate: 90, depth: 4, rateBand: 'low' as const, depthBand: 'low' as const };
+    expect(compressAdvice({ ...base, view })).toMatch(/^FASTER/);
+    expect(compressAdvice({ ...base, view: { ...view, rate: 110, rateBand: 'ok' as const } })).toMatch(/^PUSH HARDER/);
+  });
+});
+
+describe('parseCommand', () => {
+  it('maps spoken text to commands', () => {
+    expect(parseCommand('ready')).toBe('ready');
+    expect(parseCommand('next')).toBe('ready');
+    expect(parseCommand('[unk] back')).toBe('back');
+    expect(parseCommand('stop')).toBe('stop');
+    expect(parseCommand('[unk]')).toBeNull();
   });
 });

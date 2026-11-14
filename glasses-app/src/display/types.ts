@@ -35,8 +35,11 @@ export interface Page {
 export interface Display {
   /** Replace the whole page (slow: rebuilds containers). */
   show(page: Page): Promise<void>;
-  /** Change one box's text (fast path). Implementations skip unchanged text. */
-  update(name: string, content: string): Promise<void>;
+  /**
+   * Change one box's text and optionally its brightness (fast path).
+   * Implementations skip updates that change nothing.
+   */
+  update(name: string, content: string, color?: number): Promise<void>;
 }
 
 export function validatePage(page: Page): string | null {

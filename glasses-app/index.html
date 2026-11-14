@@ -97,15 +97,23 @@
 
       <div class="grid">
         <section class="card">
-          <h2>Glasses input</h2>
+          <h2>Voice</h2>
+          <p class="sub" style="margin-bottom:8px">Recognition: <b id="voice-status">off</b></p>
+          <div class="row">
+            <button id="enable-mic" class="primary">Use computer mic</button>
+          </div>
+          <div class="row">
+            <span class="sub" style="margin:0">Simulate:</span>
+            <button data-say="ready">"READY"</button>
+            <button data-say="back">"BACK"</button>
+            <button data-say="stop">"STOP"</button>
+          </div>
+          <h2>Touchpad (fallback)</h2>
           <div class="row">
             <button data-input="tap">Tap</button>
             <button data-input="double">Double tap</button>
             <button data-input="up">Swipe up</button>
             <button data-input="down">Swipe down</button>
-          </div>
-          <div class="row">
-            <button id="say-ready" class="primary">Say "READY"</button>
           </div>
           <h2>Sent by glasses</h2>
           <div id="log"></div>

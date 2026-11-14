@@ -122,26 +122,6 @@ export function directionText(d: PlacementMsg['direction']): string {
   }
 }
 
-/**
- * ASCII gauge, e.g. `..[==#=]....`. `[` and `]` mark the target zone,
- * `#` is the current value. Glasses fonts may be proportional, so this is a
- * rough indicator - check legibility in the simulator and on hardware.
- */
-export function gauge(v: number, lo: number, hi: number, tLo: number, tHi: number, width = 14): string {
-  const pos = (x: number) => Math.round(((Math.min(Math.max(x, lo), hi) - lo) / (hi - lo)) * (width - 1));
-  const a = pos(tLo);
-  const b = pos(tHi);
-  const p = pos(v);
-  let out = '';
-  for (let i = 0; i < width; i++) {
-    if (i === p) out += '#';
-    else if (i === a) out += '[';
-    else if (i === b) out += ']';
-    else out += i > a && i < b ? '=' : '.';
-  }
-  return out;
-}
-
 export function mmss(totalSeconds: number): string {
   const s = Math.max(0, Math.ceil(totalSeconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;

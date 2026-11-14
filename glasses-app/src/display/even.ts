@@ -19,8 +19,9 @@ import { validatePage, type Display, type Page } from './types';
 export class EvenDisplay implements Display {
   private started = false;
   private ids = new Map<string, number>();
-  private shown = new Map<string, string>();
-  private pending = new Map<string, string>();
+  /** What is on the glasses now, per box: text + brightness. */
+  private shown = new Map<string, Shown>();
+  private pending = new Map<string, Shown>();
   private inFlight = new Set<string>();
   private pageChange: Promise<void> = Promise.resolve();
 
@@ -35,7 +36,7 @@ export class EvenDisplay implements Display {
     this.pending.clear();
     page.boxes.forEach((b, i) => {
       this.ids.set(b.name, i + 1);
-      this.shown.set(b.name, b.content);
+      this.shown.set(b.name, { content: b.content, color: b.color ?? 4 });
     });
 
     const textObject = page.boxes.map((b, i) => new TextContainerProperty({
@@ -71,31 +72,56 @@ export class EvenDisplay implements Display {
     return this.pageChange;
   }
 
-  async update(name: string, content: string): Promise<void> {
-    if (!this.ids.has(name)) return;
+  async update(name: string, content: string, color?: number): Promise<void> {
+    const cur = this.shown.get(name);
+    if (!cur) return;
+    const want: Shown = { content, color: color ?? cur.color };
     if (this.inFlight.has(name)) {
-      this.pending.set(name, content);
+      this.pending.set(name, want);
       return;
     }
-    if (this.shown.get(name) === content) return;
-    await this.send(name, content);
+    if (same(cur, want)) return;
+    await this.send(name, want);
   }
 
-  private async send(name: string, content: string): Promise<void> {
+  private async send(name: string, want: Shown): Promise<void> {
     this.inFlight.add(name);
     try {
       await this.pageChange;
       const id = this.ids.get(name);
-      if (id === undefined) return;
+      const cur = this.shown.get(name);
+      if (id === undefined || !cur) return;
       const ok = await this.bridge.textContainerUpgrade(
-        new TextContainerUpgrade({ containerID: id, containerName: name, content }),
+        new TextContainerUpgrade({
+          containerID: id,
+          containerName: name,
+          content: want.content,
+          ...(want.color !== cur.color ? { textColor: want.color } : {}),
+        }),
       );
-      if (ok) this.shown.set(name, content);
+      if (ok) this.shown.set(name, want);
     } finally {
       this.inFlight.delete(name);
     }
     const next = this.pending.get(name);
     this.pending.delete(name);
-    if (next !== undefined && next !== this.shown.get(name)) await this.send(name, next);
+    const cur = this.shown.get(name);
+    if (next && cur && !same(next, cur)) await this.send(name, next);
+  }
+
+  /**
+   * Waits for pending page changes; true once the first page exists
+   * (the glasses mic can only be turned on after that).
+   */
+  async whenStarted(): Promise<boolean> {
+    await this.pageChange;
+    return this.started;
   }
 }
+
+interface Shown {
+  content: string;
+  color: number;
+}
+
+const same = (a: Shown, b: Shown) => a.content === b.content && a.color === b.color;

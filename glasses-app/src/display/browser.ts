@@ -43,9 +43,11 @@ export class BrowserDisplay implements Display {
     }
   }
 
-  async update(name: string, content: string): Promise<void> {
+  async update(name: string, content: string, color?: number): Promise<void> {
     const el = this.boxes.get(name);
-    if (el && el.textContent !== content) el.textContent = content;
+    if (!el) return;
+    if (el.textContent !== content) el.textContent = content;
+    if (color !== undefined) el.style.opacity = String(0.2 + 0.2 * color);
   }
 }
 
@@ -55,7 +57,7 @@ export class TeeDisplay implements Display {
   async show(page: Page): Promise<void> {
     await Promise.all(this.targets.map((t) => t.show(page)));
   }
-  async update(name: string, content: string): Promise<void> {
-    await Promise.all(this.targets.map((t) => t.update(name, content)));
+  async update(name: string, content: string, color?: number): Promise<void> {
+    await Promise.all(this.targets.map((t) => t.update(name, content, color)));
   }
 }

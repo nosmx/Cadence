@@ -6,6 +6,7 @@
   "description": "CPR Coach - Even Realities G2 glasses app (training tool, not a medical device)",
   "scripts": {
     "dev": "vite",
+    "fetch-model": "node scripts/fetch-model.mjs",
     "sim": "evenhub-simulator http://localhost:5173",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
@@ -14,7 +15,8 @@
     "qr": "evenhub qr --port 5173"
   },
   "dependencies": {
-    "@evenrealities/even_hub_sdk": "0.0.16"
+    "@evenrealities/even_hub_sdk": "0.0.16",
+    "vosk-browser": "0.0.8"
   },
   "devDependencies": {
     "@evenrealities/evenhub-cli": "0.2.0",

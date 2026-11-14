@@ -4,13 +4,21 @@
  * real hardware isn't ready. Not part of the glasses UI.
  */
 import type { CoachApp, Input } from './app';
+import type { Command } from './voice/commands';
 import type { OutboundMsg, PlacementMsg } from './protocol';
 import type { MockSource } from './sources/mock';
 import type { MessageSource } from './sources/types';
+import type { VoskVoice } from './voice/vosk';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export function mountPanel(app: CoachApp, source: MessageSource, mock: MockSource | null): void {
+export function mountPanel(
+  app: CoachApp,
+  source: MessageSource,
+  mock: MockSource | null,
+  voice: VoskVoice,
+  enableMic: (() => Promise<void>) | null,
+): void {
   const phaseEl = $('phase');
   const sourceEl = $('source');
   const logEl = $('log');
@@ -33,7 +41,41 @@ export function mountPanel(app: CoachApp, source: MessageSource, mock: MockSourc
   document.querySelectorAll<HTMLButtonElement>('[data-input]').forEach((b) =>
     b.addEventListener('click', () => app.handleInput(b.dataset.input as Input)),
   );
-  $('say-ready').addEventListener('click', () => app.voice('ready'));
+
+  // Voice: simulated commands + real recognition status.
+  document.querySelectorAll<HTMLButtonElement>('[data-say]').forEach((b) =>
+    b.addEventListener('click', () => app.command(b.dataset.say as Command)),
+  );
+  const voiceEl = $('voice-status');
+  const showVoice = () => {
+    const s = app.voiceStatus;
+    voiceEl.textContent =
+      s === 'listening' ? 'listening - say READY / BACK / STOP'
+      : s === 'loading' ? 'loading speech model...'
+      : voice.status === 'error' ? `error: ${voice.error}`
+      : voice.status === 'listening' ? 'model loaded - turn on the mic'
+      : 'off';
+  };
+  voice.statusChanged.on(showVoice);
+  app.onPhaseChange(showVoice);
+  setInterval(showVoice, 500);
+  showVoice();
+  voice.heard.on(({ command, text }) => log(`heard "${text}" -> ${command}`));
+
+  const micBtn = $<HTMLButtonElement>('enable-mic');
+  if (!enableMic) micBtn.hidden = true;
+  else {
+    micBtn.addEventListener('click', async () => {
+      micBtn.disabled = true;
+      try {
+        await enableMic();
+        micBtn.textContent = 'Computer mic on';
+      } catch (e) {
+        micBtn.disabled = false;
+        log(`mic error: ${e instanceof Error ? e.message : e}`);
+      }
+    });
+  }
 
   if (!mock) {
     $('mock-controls').hidden = true;

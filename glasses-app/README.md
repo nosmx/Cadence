@@ -8,11 +8,25 @@ The app currently runs against a **mock Arduino server** (hand position + bracel
 
 ![Screens (browser preview)](docs/screens.png)
 
-1. **Splash** — disclaimer. Tap to begin.
-2. **Set up (3 pages)** — how to kneel, where to put your hands, how to hold your body. Tap = next, swipe up = back.
-3. **Align hands** — Arduino says which way to move (toward head / feet / left / right), how far away, and CLOSER / FARTHER. Holding on the spot for 1.5 s locks in (or tap while on the spot). If hand tracking is lost you can tap to continue — a sensor never blocks CPR.
-4. **Ready** — say **"READY"** (or tap) to start. If your hands drift off the spot for 1 s you go back to aligning.
-5. **Compress** — live bracelet data: advice (FASTER / SLOWER / GOOD RATE, PUSH HARDER / LESS DEEP / GOOD DEPTH), rate, depth, pressure, count, 2-minute swap timer. Stale or low-confidence data shows `--` and a warning instead of a number. Double tap = end.
+The app is **voice controlled** — the rescuer's hands stay on the chest:
+
+| Say | Does |
+|---|---|
+| **"READY"** (or "next") | Next step / start compressions |
+| **"BACK"** | Previous step |
+| **"STOP"** | End the compression session |
+
+Touchpad / ring taps still work as a fallback; the screen only mentions them when voice isn't available (e.g. the speech model is missing), so the rescuer is never stuck.
+
+1. **Splash** — disclaimer. Say READY.
+2. **Set up (3 pages)** — how to kneel, where to put your hands, how to hold your body. Say READY for each page.
+3. **Align hands** — hands-free: the Arduino says which way to move (toward head / feet / left / right), how far, and CLOSER / FARTHER. Holding on the spot for 1.5 s moves on by itself. If hand tracking is lost, say READY to continue anyway — a sensor never blocks CPR.
+4. **Ready** — say READY to start. If your hands drift off the spot for 1 s you go back to aligning.
+5. **Compress** — kept simple:
+   - a **pulsing dot** at **110 per minute** (middle of the 100–120 target) — push when it lights up;
+   - **one instruction at a time**, most important first: FASTER / SLOWER, then PUSH HARDER / LESS DEEP, else GOOD;
+   - one line of numbers (rate, depth, pressure) and a footer with count + 2-minute swap timer.
+   Stale or low-confidence bracelet data shows `--` and "NO BRACELET DATA / READING UNCLEAR — keep pushing with the dot". Say STOP to end.
 6. **Summary** — count, time, % of compressions in the target rate and depth.
 
 ## Run it on your computer
@@ -22,8 +36,11 @@ Requires **Node.js 20.17+ or 22.13+**.
 ```bash
 cd glasses-app
 npm install
+npm run fetch-model   # one time: downloads the ~40 MB offline speech model
 npm run dev
 ```
+
+If `fetch-model` fails, download the file it prints and save it under `public/models/`. Without the model everything still works, but voice is off and the screens tell you to tap instead.
 
 This serves the app at http://localhost:5173 (and on your LAN IP, printed in the terminal).
 
@@ -31,7 +48,9 @@ This serves the app at http://localhost:5173 (and on your LAN IP, printed in the
 
 Open http://localhost:5173. You get an **approximate** glasses display (fonts and wrapping differ from the real G2) plus the mock control panel.
 
-Keys: `Enter` = tap, `D` = double tap, `↑`/`↓` = swipe, `R` = say "ready". Or use the buttons.
+- Click **Use computer mic** in the panel, then say READY / BACK / STOP out loud.
+- Or simulate voice with the panel buttons or keys: `R` = "ready", `B` = "back", `S` = "stop".
+- Touchpad fallback keys: `Enter` = tap, `D` = double tap, `↑`/`↓` = swipe.
 
 ### Option B — official Even Hub simulator (recommended for layout)
 
@@ -44,7 +63,8 @@ npm run sim
 
 (`npm run sim` = `evenhub-simulator http://localhost:5173`; the simulator is installed as a dev dependency.)
 
-- The simulator window shows the glasses display; the WebView part shows the mock control panel — use it to move the hands, change rate/depth, drop sensors, and "say READY".
+- The simulator window shows the glasses display; the WebView part shows the mock control panel — use it to move the hands, change rate/depth and drop sensors.
+- Voice: the simulator feeds your computer's microphone in as the glasses mic, so you can just say READY / BACK / STOP (run `evenhub-simulator --list-audio-input-devices` / `--aid` to pick a mic). The panel's "READY / BACK / STOP" buttons also work.
 - Use the simulator's own touchpad controls for tap / double tap / swipe.
 - **Linux only:** the simulator needs WebKitGTK 4.1 and libsoup 3, e.g. on Ubuntu/Debian:
   ```bash
@@ -84,6 +104,7 @@ Before packaging, put the Arduino's address in `app.json` → `permissions[netwo
 | Command | What it does |
 |---|---|
 | `npm run dev` | Dev server on port 5173 (LAN-visible) |
+| `npm run fetch-model` | Download the offline speech model into `public/models/` |
 | `npm run sim` | Open the Even Hub simulator on the dev server |
 | `npm test` | Unit tests (coach logic + full screen flow) |
 | `npm run typecheck` | TypeScript check |
@@ -96,20 +117,22 @@ Before packaging, put the Arduino's address in `app.json` → `permissions[netwo
 |---|---|
 | `src/app.ts` | Phase state machine, input handling, render loop |
 | `src/screens.ts` | Each screen's layout (≤ 8 text boxes, 576×288) |
-| `src/coach.ts` | Rate/depth advice, staleness + confidence checks, gauges (plain code, no LLM) |
+| `src/coach.ts` | Rate/depth advice, staleness + confidence checks (plain code, no LLM) |
 | `src/guidance.ts` | CPR copy + targets — **verify against AHA/Red Cross before demo** |
 | `src/protocol.ts` | Message types + validation of incoming JSON |
 | `src/sources/mock.ts` | Mock Arduino + bracelet |
 | `src/sources/websocket.ts` | Real Arduino WebSocket client (auto-reconnect) |
 | `src/display/even.ts` | G2 rendering via Even Hub SDK (deduped, coalesced text updates) |
 | `src/display/browser.ts` | Approximate browser preview / phone mirror |
+| `src/voice/commands.ts` | Voice commands (READY / BACK / STOP) |
+| `src/voice/vosk.ts` | Offline speech recognition (Vosk WASM), fed by the glasses mic or the computer mic |
 | `src/panel.ts`, `index.html` | Mock control panel |
 
 ## Open items / unverified
 
 - **CPR copy and targets** (100–120/min, 5–6 cm, 2-min swap, set-up steps) were written from memory — check them against AHA/Red Cross and record the source in `src/guidance.ts`.
-- **"READY" voice command:** mocked with a button / `R` key. Real speech-to-text isn't chosen yet — the glasses mic gives raw 16 kHz PCM, so recognition has to run somewhere (phone or server). Tap also starts compressions as a fallback.
-- **Display refresh speed on hardware** (go/no-go #1): not measured yet. All live values use text containers; no images are used.
+- **Voice on hardware:** recognition runs offline on the phone (Vosk WASM in a Web Worker), restricted to the command words. Not yet verified: WASM/worker support and speed inside the Even app WebView, recognition accuracy with the glasses mic in a noisy room, and false triggers while counting out loud. The 40 MB model also has to ship somehow — bundled in the `.ehpk` (size limit unknown) or downloaded from a whitelisted host.
+- **Pace dot vs. refresh speed** (go/no-go #1): the dot needs ~3.7 text updates per second (bright + dim at 110/min). It is driven from the clock, so it never drifts, and updates are coalesced, so a slow link drops frames instead of lagging. Measure on real glasses; if BLE can't keep up, fall back to flipping once per beat.
+- **Dot glyph:** drawn with `●` characters; confirm the G2 font has that glyph (the simulator shows a placeholder box if not).
 - **Arduino reachability** (go/no-go #3): not tested — whether the Even app WebView can open a plain `ws://` connection to a LAN device, and the whitelist format for it.
-- **Text gauges** (`..[=#]..`) assume roughly even character widths; check on the simulator / glasses.
 - **Click events:** a click is assumed to arrive with `eventType` 0 or missing (protobuf default). Confirm on hardware.
