@@ -25,6 +25,8 @@ export interface PlacementMsg extends Base {
   direction: 'head' | 'feet' | 'left' | 'right' | null;
   /** Signal quality 0..1. */
   signal: number;
+  /** Sender's own trend, for anchors that sense closer/farther but not centimetres (BLE RSSI). */
+  trend?: 'closer' | 'farther' | 'steady' | null;
 }
 
 /** Bracelet (relayed by Arduino) -> glasses: one message per detected compression. */
@@ -77,6 +79,7 @@ export function parseMessage(raw: unknown): InboundMsg | null {
       distance_cm: num(m.distance_cm) ?? null,
       direction,
       signal: num(m.signal) ?? 0,
+      trend: (['closer', 'farther', 'steady'] as const).find((t) => t === m.trend) ?? null,
     };
   }
 

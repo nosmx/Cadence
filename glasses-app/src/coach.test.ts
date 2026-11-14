@@ -48,6 +48,11 @@ describe('evaluatePlacement', () => {
     expect(evaluatePlacement(p(3), 5, 0, 10).trend).toBe('closer');
     expect(evaluatePlacement(p(6), 5, 0, 10).trend).toBe('farther');
   });
+  it('uses the sender trend when distance is unknown', () => {
+    const m: PlacementMsg = { ...p(0), distance_cm: null, trend: 'closer' };
+    expect(evaluatePlacement(m, null, 0, 10).trend).toBe('closer');
+    expect(parseMessage({ type: 'placement', on_target: false, distance_cm: null, signal: 0.5, trend: 'farther' })).toMatchObject({ trend: 'farther' });
+  });
   it('reports lost when the Arduino goes quiet', () => {
     expect(evaluatePlacement(p(0, true), 0, 0, LIMITS.placementStaleMs + 1).status).toBe('lost');
   });

@@ -104,7 +104,7 @@ export function evaluatePlacement(
 ): PlacementView {
   if (!msg || receivedAt === undefined) return { status: 'waiting' };
   if (now - receivedAt > LIMITS.placementStaleMs) return { status: 'lost' };
-  let trend: PlacementView['trend'];
+  let trend: PlacementView['trend'] = msg.trend ?? undefined;
   if (msg.distance_cm !== null && prevDistance !== null && prevDistance !== undefined) {
     const d = msg.distance_cm - prevDistance;
     trend = d < -0.3 ? 'closer' : d > 0.3 ? 'farther' : 'steady';

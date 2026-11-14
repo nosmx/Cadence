@@ -10,7 +10,7 @@
     {
       "name": "network",
       "desc": "Connects to the CPR Coach Arduino server on your local network to receive hand-position and compression data.",
-      "whitelist": ["http://192.168.4.1"]
+      "whitelist": ["http://192.168.4.1", "http://172.17.25.117", "http://172.17.20.85"]
     },
     {
       "name": "g2-microphone",
