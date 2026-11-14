@@ -1,0 +1,11 @@
+# secrets and local data: never commit
+.env
+*.key
+recordings/
+voice_cache/
+vexo-open-kit/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
