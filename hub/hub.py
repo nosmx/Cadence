@@ -87,6 +87,8 @@ def validate(m):
 
 
 def publish(m):
+    if isinstance(m.get("ts"), NUM) and m["ts"] > 1e12:  # sender stamped it: arrival delay (clocks must agree)
+        m["lag_ms"] = int(time.time() * 1000 - m["ts"])
     m.setdefault("ts", int(time.time() * 1000))
     m.setdefault("source", "hub")
     m["t"] = round(time.time() - T0, 2)
@@ -156,6 +158,8 @@ def summarize(text, phase):
 
 
 def on_voice(m):
+    if len(m["phrase"].split()) < 2:  # glasses commands (ready/back/stop): already sent as confirm, not a note
+        return
     phase = latest.get("state", {}).get("phase", "?")
     entry = summarize(m["phrase"], phase)
     publish({"type": "log_entry", "id": uuid.uuid4().hex[:8], "status": "proposed", "confirmed": False,

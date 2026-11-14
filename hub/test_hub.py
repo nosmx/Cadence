@@ -52,13 +52,15 @@ while not any(m["type"] == "vitals" for m in seen):
         seen.append(json.loads(line[6:]))
 assert {"state", "compression", "vitals"} <= {m["type"] for m in seen}
 
-# voice note -> proposed entry -> confirmed
+# voice note -> proposed entry -> confirmed; one-word commands make no entry
+assert post({"type": "voice_event", "phrase": "ready"}) == 200
 assert post({"type": "voice_event", "phrase": "AED arrived"}) == 200
 for _ in range(50):
     entries = [m for m in snap() if m["type"] == "log_entry"]
     if entries: break
     time.sleep(0.05)
 e = entries[0]
+assert len(entries) == 1  # "ready" was not logged
 assert e["status"] == "proposed" and e["confirmed"] is False and e["llm"] is False
 assert e["event"] == "AED arrived" and e["said"] == "AED arrived" and e["at"] > 0
 assert post({"type": "log_entry", "id": "missing", "status": "confirmed"}) == 400

@@ -48,7 +48,7 @@ The hub adds `t` (seconds since the hub started the session) to everything it re
 **`vitals`** (→ hub, dashboard): `{"hr_bpm": 128}`. Nothing real sends this yet.
 
 **`voice_event`** (glasses mic → hub): `{"phrase": "aed arrived, pads on"}`
-Text is already transcribed. Two or more words become a proposed `log_entry` (LLM-tidied); one word (`ready`) is a command and is logged as raw text without an LLM call.
+Text is already transcribed. Two or more words become a proposed `log_entry` (LLM-tidied); one word (`ready`, `back`, `stop`) is a glasses command: no log entry, no LLM call.
 
 **`confirm`** (glasses → hub): `{"what": "start_compressions"}` — `hands_placed` | `start_compressions` | `end_session`.
 The hub turns `start_compressions` into phase `compress` and `end_session` into phase `check`.
