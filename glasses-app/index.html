@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CPR Coach Glasses</title>
+    <style>
+      :root {
+        --bg: #f4f5f7;
+        --panel: #ffffff;
+        --ink: #1b1f24;
+        --muted: #5b6470;
+        --line: #d9dde3;
+        --accent: #1f7a4d;
+        --g2: #3dff7a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #121417;
+          --panel: #1c1f24;
+          --ink: #e8eaed;
+          --muted: #9aa3ad;
+          --line: #2e333a;
+          --accent: #4cc38a;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--bg);
+        color: var(--ink);
+        font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      h2 { font-size: 14px; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+      .sub { color: var(--muted); margin: 0 0 12px; font-size: 12px; }
+      .wrap { max-width: 960px; margin: 0 auto; }
+
+      /* Approximate G2 display */
+      #preview { overflow-x: auto; margin-bottom: 4px; }
+      .g2-screen {
+        position: relative;
+        background: #000;
+        border-radius: 8px;
+        font: 19px/1.25 "DejaVu Sans Mono", Menlo, Consolas, monospace;
+        color: var(--g2);
+        text-shadow: 0 0 4px rgba(61, 255, 122, 0.45);
+        flex: none;
+      }
+      .g2-box {
+        position: absolute;
+        padding: 6px;
+        white-space: pre-wrap;
+        overflow: hidden;
+        border-style: solid;
+        border-color: var(--g2);
+        border-radius: 6px;
+      }
+      .g2-error { color: #d33; font-size: 12px; min-height: 1em; }
+
+      .status { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--muted); margin-bottom: 12px; }
+      .status b { color: var(--ink); }
+
+      .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+      .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; }
+      .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-bottom: 8px; }
+      label { display: flex; gap: 6px; align-items: center; }
+      .range { display: grid; grid-template-columns: 74px 1fr 64px; gap: 8px; align-items: center; margin-bottom: 6px; }
+      .range input { width: 100%; }
+      .range output { text-align: right; font-variant-numeric: tabular-nums; }
+      button, select {
+        font: inherit;
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: var(--bg);
+        color: var(--ink);
+        cursor: pointer;
+      }
+      button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+      #log { font: 12px/1.5 ui-monospace, Menlo, monospace; color: var(--muted); max-height: 180px; overflow: auto; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>CPR Coach - glasses mock</h1>
+      <p class="sub">Training tool, not a medical device. Practice on a manikin or pillow only.</p>
+
+      <div id="preview"></div>
+      <div class="status">
+        <span>Phase: <b id="phase">-</b></span>
+        <span>Source: <b id="source">-</b></span>
+        <span id="mode"></span>
+      </div>
+
+      <div class="grid">
+        <section class="card">
+          <h2>Glasses input</h2>
+          <div class="row">
+            <button data-input="tap">Tap</button>
+            <button data-input="double">Double tap</button>
+            <button data-input="up">Swipe up</button>
+            <button data-input="down">Swipe down</button>
+          </div>
+          <div class="row">
+            <button id="say-ready" class="primary">Say "READY"</button>
+          </div>
+          <h2>Sent by glasses</h2>
+          <div id="log"></div>
+        </section>
+
+        <div id="mock-controls" class="grid" style="grid-column: span 2; grid-template-columns: inherit">
+          <section class="card">
+            <h2>Mock Arduino - hand position</h2>
+            <div class="row">
+              <label><input type="checkbox" id="arduino-online" /> Arduino online</label>
+            </div>
+            <div class="row">
+              <select id="placement-mode">
+                <option value="auto">Auto (hands drift onto spot)</option>
+                <option value="manual">Manual</option>
+              </select>
+              <button id="displace">Knock hands off</button>
+            </div>
+            <div id="manual-placement">
+              <div class="row">
+                <button data-dir="head">Off: toward head</button>
+                <button data-dir="feet">Off: toward feet</button>
+                <button data-dir="left">Off: left</button>
+                <button data-dir="right">Off: right</button>
+                <button data-dir="on" class="primary">On target</button>
+              </div>
+              <div class="range">
+                <span>Distance</span>
+                <input id="manual-distance" type="range" min="0.5" max="15" step="0.5" value="6" />
+                <span>cm</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="card">
+            <h2>Mock bracelet - compressions</h2>
+            <div class="row">
+              <label><input type="checkbox" id="bracelet-online" /> Bracelet online</label>
+            </div>
+            <div class="range"><span>Rate</span><input id="rate" type="range" min="60" max="160" step="1" /><output id="rate-out"></output></div>
+            <div class="range"><span>Depth</span><input id="depth" type="range" min="2" max="8" step="0.1" /><output id="depth-out"></output></div>
+            <div class="range"><span>Pressure</span><input id="pressure" type="range" min="0" max="1" step="0.01" /><output id="pressure-out"></output></div>
+            <div class="range"><span>Confidence</span><input id="confidence" type="range" min="0" max="1" step="0.01" /><output id="confidence-out"></output></div>
+            <div class="row">
+              <button data-preset="slow">Too slow</button>
+              <button data-preset="good">Good</button>
+              <button data-preset="fast">Too fast</button>
+              <button data-preset="shallow">Shallow</button>
+              <button data-preset="lowconf">Low confidence</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
