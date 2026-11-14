@@ -29,7 +29,8 @@ cp .env.example .env                  # then put your OpenAI key in .env (git ig
 
 ```bash
 adb push hub/anchor.py /home/arduino/anchor.py
-adb shell 'python3 /home/arduino/anchor.py --hub http://<laptop-ip>:8000/msg'   # prints dBm 1/s
+adb reverse tcp:8000 tcp:8000      # venue WiFi blocks board<->laptop; this goes over the USB cable
+adb shell 'python3 /home/arduino/anchor.py --hub http://127.0.0.1:8000/msg'   # prints dBm 1/s
 ```
 
   Hands on the spot, then off: note both dBm values and restart with `--near-dbm` halfway between.

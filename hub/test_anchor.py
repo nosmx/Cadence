@@ -12,6 +12,8 @@ assert anchor.parse("[bluetooth]# scan on") is None
 a = anchor.Anchor(near_dbm=-60, alpha=1.0)  # alpha 1 = no smoothing, easier to reason about
 a.feed("[CHG] Device AA:BB:CC:DD:EE:FF RSSI: -40", 0)  # not the band yet
 assert a.ema is None and a.placement(0)["signal"] == 0
+a.feed("[NEW] Device F9:C5:72:A6:36:8C Vexo-HACK-38", 0)  # another team's band: ignored
+assert a.addr is None
 a.feed(f"[NEW] Device {A} Vexo-HACK-27", 0)
 a.feed(f"[CHG] Device {A} RSSI: -75", 0.0)
 p = a.placement(0.1)

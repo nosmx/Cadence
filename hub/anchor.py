@@ -7,7 +7,7 @@ compression depth. Tune --near-dbm on the real setup: watch the printed dBm with
 the spot, then off it, and pick a value in between.
 
 Run on the UNO Q (stdlib only, needs bluez's bluetoothctl):
-    python3 anchor.py --hub http://127.0.0.1:8000/msg            band found by name "Vexo"
+    python3 anchor.py --hub http://127.0.0.1:8000/msg            band found by exact name Vexo-HACK-27
     python3 anchor.py --addr C1:3F:B9:F4:08:66 --near-dbm -55
 Test anywhere: python3 hub/test_anchor.py
 """
@@ -33,7 +33,7 @@ def parse(line):
 class Anchor:
     """Smoothed RSSI -> placement. All the calibration knobs are here."""
 
-    def __init__(self, name="vexo", addr=None, near_dbm=-60, hyst_db=3, alpha=0.3, trend_db=2, trend_s=1.0):
+    def __init__(self, name="Vexo-HACK-27", addr=None, near_dbm=-60, hyst_db=3, alpha=0.3, trend_db=2, trend_s=1.0):
         self.want_name, self.addr = name.lower(), addr and addr.upper()
         self.near, self.hyst, self.alpha, self.trend_db, self.trend_s = near_dbm, hyst_db, alpha, trend_db, trend_s
         self.ema = None
@@ -46,7 +46,7 @@ class Anchor:
         if not p:
             return
         kind, addr, val = p
-        if kind == "name" and self.addr is None and self.want_name in val.lower():
+        if kind == "name" and self.addr is None and val.lower() == self.want_name:
             self.addr = addr
             print(f"[anchor] band found: {val} {addr}", file=sys.stderr)
         elif kind == "rssi" and addr == self.addr:
@@ -87,7 +87,7 @@ def post(url, m):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--hub", default="http://127.0.0.1:8000/msg")
-    ap.add_argument("--name", default="vexo", help="band name contains this (default vexo)")
+    ap.add_argument("--name", default="Vexo-HACK-27", help="exact band name; other teams have Vexo bands too")
     ap.add_argument("--addr", help="band address, skips the name search")
     ap.add_argument("--near-dbm", type=float, default=-60, help="smoothed RSSI at or above this = on the spot")
     ap.add_argument("--stdin", action="store_true", help="read bluetoothctl lines from stdin (replay)")
