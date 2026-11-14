@@ -1,0 +1,5 @@
+# The band library itself is not installed: it is used straight from vexo-open-kit/.
+bleak        # Bluetooth to the real band
+websockets   # the WebSocket server for the hub, glasses and dashboard
+pyserial     # Arduino on a USB cable
+# Tests only:  python -m pip install pytest
