@@ -2,7 +2,7 @@
 
     python -m sensing.fake_messages                 WebSocket on ws://<this laptop>:8765 + JSON lines
     python -m sensing.fake_messages --quiet         WebSocket only
-    python -m sensing.fake_messages --post URL      also HTTP POST every message
+    python -m sensing.fake_messages --post URL      also HTTP POST compressions (--post-all: every message)
 
 It cycles through: slow, good, fast, shallow, not releasing, paused. Same format as the
 real pipeline (sensing/messages.py). The numbers are invented, not measured.
@@ -107,13 +107,14 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=config.WS_PORT, help="WebSocket port (default %(default)s)")
     parser.add_argument("--no-ws", action="store_true", help="no WebSocket server")
     parser.add_argument("--quiet", action="store_true", help="no JSON lines on the screen")
-    parser.add_argument("--post", metavar="URL", help="also HTTP POST each message to this address")
+    parser.add_argument("--post", metavar="URL", help="also HTTP POST each compression message to this address")
+    parser.add_argument("--post-all", action="store_true", help="POST status and heartbeat messages too")
     parser.add_argument("--serial-out", metavar="PORT", help="also write each message as a JSON line to a serial port")
     parser.add_argument("--no-arduino", action="store_true", help="pretend there is no Arduino (band-only depth)")
     parser.add_argument("--seconds", type=float, help="stop after this many seconds")
     args = parser.parse_args(argv)
     publisher = Publisher(stdout=not args.quiet, ws=not args.no_ws, ws_port=args.port, post_url=args.post,
-                          serial_out=args.serial_out)
+                          post_all=args.post_all, serial_out=args.serial_out)
     if not args.no_ws:
         import sys
         print("Fake messages on ws://localhost:%d (other laptops: ws://<this laptop's IP>:%d). Stop with Ctrl+C."

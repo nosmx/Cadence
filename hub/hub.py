@@ -14,15 +14,21 @@ import openai
 PHASES = {"check", "call", "position", "compress", "aed"}
 DIRECTIONS = {"head", "feet", "left", "right", None}
 CONFIRMS = {"hands_placed": None, "start_compressions": "compress", "end_session": "check"}  # -> phase
+TRENDS = {"closer", "farther", "steady", None}
 NUM = (int, float)
+NULL_NUM = (int, float, type(None))
 REQUIRED = {  # type -> {field: allowed types}. Matches glasses-app/src/protocol.ts
     "placement": {"on_target": bool, "signal": NUM},
-    "compression": {"rate_cpm": NUM, "depth_cm": NUM, "quality": str, "confidence": NUM},
+    # The band sends null rate (first push after a pause) and null depth/quality; the glasses
+    # skip those, the dashboard shows "?". Extra band fields (count, recoil_ok...) pass through.
+    "compression": {"rate_cpm": NULL_NUM, "depth_cm": NULL_NUM, "quality": (str, type(None)), "confidence": NUM},
     "vitals": {"hr_bpm": NUM},
     "state": {"phase": str},
     "voice_event": {"phrase": str},
     "confirm": {"what": str},
     "log_entry": {"id": str, "status": str},
+    "status": {},     # band: connected, battery_percent, arduino_ok... (sensing/messages.py)
+    "heartbeat": {},  # band, 1/s: latest compression fields + status fields
 }
 WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 MODEL = "gpt-5-mini"
@@ -51,7 +57,7 @@ def validate(m):
     if fields is None:
         return f"type must be one of {sorted(REQUIRED)}"
     for k, typ in fields.items():
-        if not isinstance(m.get(k), typ) or (typ is not bool and isinstance(m.get(k), bool)):
+        if k not in m or not isinstance(m[k], typ) or (typ is not bool and isinstance(m[k], bool)):
             return f"{m['type']}.{k} missing or wrong type"
     if m["type"] == "state" and m["phase"] not in PHASES:
         return f"phase must be one of {sorted(PHASES)}"
@@ -68,6 +74,8 @@ def validate(m):
             return "direction must be head, feet, left, right or null"
         if m.get("distance_cm") is not None and not isnum(m["distance_cm"]):
             return "distance_cm must be a number or null"
+        if m.get("trend") not in TRENDS:
+            return "trend must be closer, farther, steady or null"
     if m["type"] == "confirm" and m["what"] not in CONFIRMS:
         return f"what must be one of {sorted(CONFIRMS)}"
     if m["type"] == "log_entry":

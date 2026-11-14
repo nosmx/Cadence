@@ -21,7 +21,7 @@ CORS is open (`*`).
 |---|---|---|
 | `type` | string | One of the types below. |
 | `ts` | number | Sender clock, Unix milliseconds. |
-| `source` | string | `arduino`, `bracelet`, `glasses`, `hub`, `dashboard`, `fake`. |
+| `source` | string | `band`, `anchor`, `glasses`, `hub`, `dashboard`, `fake`. |
 
 The hub adds `t` (seconds since the hub started the session) to everything it rebroadcasts.
 
@@ -30,16 +30,22 @@ The hub adds `t` (seconds since the hub started the session) to everything it re
 **`placement`** (UNO Q anchor → hub → glasses): where the rescuer's hands are relative to the spot.
 `{"on_target": false, "distance_cm": 6.2, "direction": "head", "signal": 0.8}`
 - `distance_cm`: number or `null` if unknown. `direction`: `head` | `feet` | `left` | `right` | `null`.
+- `trend` (optional): `closer` | `farther` | `steady` | `null`, for an anchor that senses direction of change but not centimetres (the UNO Q's Bluetooth signal strength). The glasses use it when `distance_cm` is `null`.
 - `signal` 0–1. Send at least every 0.5 s: the glasses treat placement older than 1.5 s as lost.
 
 **`compression`** (band, Person 1 → hub → glasses): one per detected compression.
 `{"rate_cpm": 112, "depth_cm": 5.3, "pressure": 0.7, "quality": "good", "confidence": 0.86}`
+- `rate_cpm`, `depth_cm`, `quality` may be `null` (first push after a pause; no depth yet). The hub forwards them; the glasses skip that one message, the dashboard shows "?".
 - `depth_cm` is an estimate (unverified until ruler-tested). `pressure` 0–1, optional.
+- The band adds more fields (`count`, `recoil_ok`, `hands_off_s`, `fatigue`...; see `sensing/README.md`). The hub passes them through.
 - `quality`: the band's own label, e.g. `good` | `shallow` | `slow` | `fast`.
 - `confidence` 0–1. **Below 0.6 the glasses and dashboard show "?" / low signal, not the numbers.**
 - **No compression for 1.5 s while compressing = sensor lost**, judged by local arrival time.
 
-**`vitals`** (band → hub, dashboard): `{"hr_bpm": 128}`
+**`status`** (band → hub, dashboard): `{"connected": true, "reconnecting": false, "paused": false, "arduino_ok": true, "battery_percent": 87}` on change.
+**`heartbeat`** (band, once a second): the latest compression fields plus the status fields. No required fields.
+
+**`vitals`** (→ hub, dashboard): `{"hr_bpm": 128}`. Nothing real sends this yet.
 
 **`voice_event`** (glasses mic → hub): `{"phrase": "aed arrived, pads on"}`
 Text is already transcribed. Two or more words become a proposed `log_entry` (LLM-tidied); one word (`ready`) is a command and is logged as raw text without an LLM call.

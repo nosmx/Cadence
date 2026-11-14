@@ -26,12 +26,17 @@ ok = {"type": "compression", "ts": 1, "source": "fake", "rate_cpm": 110,
 assert post(ok) == 200
 assert post({**ok, "confidence": 2}) == 400
 assert post({**ok, "pressure": 1.5}) == 400
-assert post({**ok, "depth_cm": None}) == 400  # glasses need a number
+assert post({**ok, "depth_cm": None, "rate_cpm": None, "quality": None}) == 200  # band, before a full reading
+assert post({k: v for k, v in ok.items() if k != "depth_cm"}) == 400  # missing is still an error
+assert post({**ok, "rate_cpm": True}) == 400
+assert post({"type": "status", "source": "band", "connected": True, "battery_percent": 87}) == 200
+assert post({"type": "heartbeat", "source": "band", "count": 0, "connected": True}) == 200
 place = {"type": "placement", "on_target": False, "distance_cm": 6, "direction": "head", "signal": 0.8}
 assert post(place) == 200
 assert post({**place, "distance_cm": None, "direction": None}) == 200
 assert post({**place, "on_target": 1}) == 400  # must be a bool
 assert post({**place, "direction": "up"}) == 400
+assert post({**place, "trend": "closer"}) == 200 and post({**place, "trend": "up"}) == 400
 assert post({"type": "confirm", "what": "nope"}) == 400
 assert post({"type": "nope"}) == 400
 assert post({"type": "state", "phase": "compress"}) == 200

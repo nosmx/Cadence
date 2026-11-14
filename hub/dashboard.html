@@ -39,6 +39,7 @@
   <div class="stat"><b id="quality">–</b><span>cue</span></div>
   <div class="stat"><b id="hr">–</b><span>rescuer HR</span></div>
   <div class="stat"><b id="place">–</b><span>hands</span></div>
+  <div class="stat"><b id="band">–</b><span id="band-sub">band</span></div>
 </div>
 
 <h2 style="font-size:16px">Timeline</h2>
@@ -88,13 +89,17 @@ es.onmessage = e => {
   } else if (m.type === "compression") {
     lastComp = Date.now(); lowConf = m.confidence < MIN_CONF;
     $("count").textContent = ++count;
-    $("rate").textContent = lowConf ? "?" : m.rate_cpm;
-    $("depth").textContent = lowConf ? "?" : m.depth_cm.toFixed(1);
-    $("quality").textContent = lowConf ? "?" : m.quality.toUpperCase();
+    $("rate").textContent = lowConf || m.rate_cpm == null ? "?" : Math.round(m.rate_cpm);
+    $("depth").textContent = lowConf || m.depth_cm == null ? "?" : m.depth_cm.toFixed(1);
+    $("quality").textContent = lowConf || !m.quality ? "?" : m.quality.toUpperCase();
   } else if (m.type === "vitals") $("hr").textContent = m.hr_bpm;
   else if (m.type === "placement")
     $("place").textContent = m.on_target ? "on spot" : m.direction ? `→ ${m.direction}` : "off spot";
   else if (m.type === "log_entry") entry(m);
+  else if (m.type === "status" || m.type === "heartbeat") {  // band, sensing/messages.py
+    $("band").textContent = m.connected ? (m.battery_percent ?? "?") + "%" : m.reconnecting ? "…" : "off";
+    $("band-sub").textContent = "band" + (m.connected ? "" : " not connected") + (m.arduino_ok ? " + arduino" : "");
+  }
 };
 es.onerror = () => { $("status").textContent = "Hub disconnected"; $("status").className = "bad"; };
 
