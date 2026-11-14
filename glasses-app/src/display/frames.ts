@@ -20,7 +20,13 @@ export type FrameStore = Map<string, Frame>;
 export const FIGURE_W = 288;
 export const FIGURE_H = 144;
 
-/** Draw one frame. `push` = 0 (top of stroke) .. 1 (bottom of stroke). */
+/**
+ * Draw one frame. `push` = 0 (top of stroke) .. 1 (bottom of stroke).
+ *
+ * Side view, patient on their back (head right), rescuer kneeling at the chest:
+ * shoulders straight above the hands, arms locked. Because the arms are locked,
+ * the shoulders drop by exactly the compression depth; the hips act as the hinge.
+ */
 export function drawCprFigure(ctx: CanvasRenderingContext2D, push: number, color: string, dim: string): void {
   const w = FIGURE_W;
   const h = FIGURE_H;
@@ -30,57 +36,81 @@ export function drawCprFigure(ctx: CanvasRenderingContext2D, push: number, color
   ctx.lineJoin = 'round';
 
   type P = [number, number];
-  const line = (pts: P[], width: number, c = color) => {
-    ctx.strokeStyle = c;
-    ctx.lineWidth = width;
+  const path = (pts: P[]) => {
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
     for (const [x, y] of pts.slice(1)) ctx.lineTo(x, y);
+  };
+  const stroke = (pts: P[], width: number, c: string) => {
+    path(pts);
+    ctx.strokeStyle = c;
+    ctx.lineWidth = width;
     ctx.stroke();
   };
-  const disc = (x: number, y: number, r: number, c = color) => {
-    ctx.fillStyle = c;
+  /** Bright limb with a black outline so it reads clearly where it crosses the patient. */
+  const limb = (pts: P[], width: number) => {
+    stroke(pts, width + 4, '#000');
+    stroke(pts, width, color);
+  };
+  const disc = (x: number, y: number, r: number, c: string, outline = false) => {
     ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x, y, r + (outline ? 2 : 0), 0, Math.PI * 2);
+    ctx.fillStyle = outline ? '#000' : c;
     ctx.fill();
+    if (outline) disc(x, y, r, c);
   };
 
-  const ground = 138;
-  const dip = 6 * push; // chest goes down
-  const drop = 12 * push; // rescuer's shoulders go down
+  const ground = 137;
+  const depth = 8 * push; // compression depth in px (chest dip = shoulder drop)
 
   // Ground
-  line([[6, ground + 3], [w - 6, ground + 3]], 2, dim);
+  stroke([[4, ground + 3], [w - 4, ground + 3]], 2, dim);
 
-  // Patient on their back, head to the right (dimmer, so the rescuer stands out).
-  const chestX = 196;
-  const chestY = 118 + dip;
-  line([[40, 130], [120, 128], [chestX, chestY], [244, 124]], 10, dim);
-  disc(262, 122, 11, dim);
+  // ---- Patient (dim) ----
+  const chestX = 200;
+  const chestTop = 107 + depth;
+  // Legs
+  stroke([[134, 126], [84, 129], [36, 130]], 13, dim);
+  stroke([[36, 130], [30, 120]], 7, dim); // feet pointing up
+  // Torso as a filled shape: back on the ground, chest rising under the hands.
+  ctx.fillStyle = dim;
+  ctx.beginPath();
+  ctx.moveTo(128, 134);
+  ctx.lineTo(128, 118);
+  ctx.quadraticCurveTo(160, 112, chestX - 14, chestTop + 2);
+  ctx.lineTo(chestX + 14, chestTop + 1);
+  ctx.quadraticCurveTo(232, 108, 238, 116);
+  ctx.lineTo(238, 134);
+  ctx.closePath();
+  ctx.fill();
+  stroke([[238, 124], [248, 123]], 9, dim); // neck
+  disc(260, 121, 12, dim); // head
 
-  // Rescuer kneeling beside the chest: shoulders straight over hands, arms locked.
-  const foot: P = [70, ground];
-  const knee: P = [116, ground];
-  const hip: P = [124, 94 + drop * 0.3];
-  const shoulder: P = [chestX - 6, 48 + drop];
-  const hands: P = [chestX, chestY - 9];
-  line([foot, knee, hip], 9); // shin + thigh
-  line([hip, shoulder], 13); // back
-  line([shoulder, hands], 7); // straight arms
-  // Head continues the line of the back.
-  const dx = shoulder[0] - hip[0];
-  const dy = shoulder[1] - hip[1];
-  const len = Math.hypot(dx, dy);
-  disc(shoulder[0] + (dx / len) * 22, shoulder[1] + (dy / len) * 22 - 4, 13);
-  // Stacked hands on the chest.
+  // ---- Rescuer (bright) ----
+  const foot: P = [94, ground];
+  const knee: P = [146, ground - 2];
+  const hip: P = [152, 86 + depth * 0.35];
+  const shoulder: P = [chestX - 2, 47 + depth];
+  const hands: P = [chestX, chestTop + 2];
+  limb([foot, knee], 11); // shin on the ground
+  limb([knee, hip], 14); // thigh, nearly upright
+  limb([hip, shoulder], 18); // back, leaning forward from the hips
+  // Head and neck, looking down at the chest.
+  limb([shoulder, [shoulder[0] + 13, shoulder[1] - 8]], 9);
+  disc(shoulder[0] + 21, shoulder[1] - 14, 12, color, true);
+  // Arms locked straight, shoulders over hands.
+  limb([shoulder, [hands[0], hands[1] - 6]], 9);
+  // Hands stacked on the centre of the chest.
+  ctx.fillStyle = '#000';
+  ctx.fillRect(hands[0] - 14, hands[1] - 7, 28, 10);
   ctx.fillStyle = color;
-  ctx.fillRect(hands[0] - 11, hands[1] - 2, 22, 7);
+  ctx.fillRect(hands[0] - 12, hands[1] - 5, 24, 6);
 
   // Push arrow on the down frame.
   if (push > 0.5) {
-    const ax = chestX + 40;
-    line([[ax, 44], [ax, 80]], 5);
-    line([[ax - 9, 71], [ax, 82], [ax + 9, 71]], 5);
+    const ax = chestX + 48;
+    stroke([[ax, 30], [ax, 66]], 5, color);
+    stroke([[ax - 9, 57], [ax, 68], [ax + 9, 57]], 5, color);
   }
 }
 
