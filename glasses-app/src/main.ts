@@ -2,6 +2,7 @@ import { AudioInputSource, waitForEvenAppBridge, type EvenAppBridge } from '@eve
 import { CoachApp, type Input } from './app';
 import { BrowserDisplay, TeeDisplay } from './display/browser';
 import { EvenDisplay } from './display/even';
+import { buildFrames } from './display/frames';
 import type { Display } from './display/types';
 import { keyToInput, toInput } from './input';
 import { mountPanel } from './panel';
@@ -39,9 +40,10 @@ async function main(): Promise<void> {
   const mock = wsUrl ? null : new MockSource();
   const source: MessageSource = mock ?? new WebSocketSource(wsUrl!);
 
-  const preview = new BrowserDisplay(document.getElementById('preview')!);
+  const frames = await buildFrames();
+  const preview = new BrowserDisplay(document.getElementById('preview')!, frames);
   const bridge = await detectBridge();
-  const glasses = bridge ? new EvenDisplay(bridge) : null;
+  const glasses = bridge ? new EvenDisplay(bridge, frames) : null;
   const display: Display = glasses ? new TeeDisplay([glasses, preview]) : preview;
   document.getElementById('mode')!.textContent = bridge
     ? 'Even bridge connected - glasses + mirror'

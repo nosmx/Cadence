@@ -24,8 +24,9 @@ Touchpad / ring taps still work as a fallback; the screen only mentions them whe
 4. **Ready** — say READY to start. If your hands drift off the spot for 1 s you go back to aligning.
 5. **Compress** — kept simple:
    - a **pulsing dot** at **110 per minute** (middle of the 100–120 target) — push when it lights up;
-   - **one instruction at a time**, most important first: FASTER / SLOWER, then PUSH HARDER / LESS DEEP, else GOOD;
-   - one line of numbers (rate, depth, pressure) and a footer with count + 2-minute swap timer.
+   - next to it, a **figure of a rescuer doing CPR** that pushes down on the same beat, so you can copy the motion (arms locked, shoulders over hands);
+   - **one instruction at a time** on one line, most important first: FASTER / SLOWER, then PUSH HARDER / LESS DEEP, else GOOD;
+   - one line of numbers (rate, depth, pressure), plus count and 2-minute swap timer on the right.
    Stale or low-confidence bracelet data shows `--` and "NO BRACELET DATA / READING UNCLEAR — keep pushing with the dot". Say STOP to end.
 6. **Summary** — count, time, % of compressions in the target rate and depth.
 
@@ -124,6 +125,7 @@ Before packaging, put the Arduino's address in `app.json` → `permissions[netwo
 | `src/sources/websocket.ts` | Real Arduino WebSocket client (auto-reconnect) |
 | `src/display/even.ts` | G2 rendering via Even Hub SDK (deduped, coalesced text updates) |
 | `src/display/browser.ts` | Approximate browser preview / phone mirror |
+| `src/display/frames.ts` | CPR figure frames (canvas-drawn PNGs) for the image container |
 | `src/voice/commands.ts` | Voice commands (READY / BACK / STOP) |
 | `src/voice/vosk.ts` | Offline speech recognition (Vosk WASM), fed by the glasses mic or the computer mic |
 | `src/panel.ts`, `index.html` | Mock control panel |
@@ -133,6 +135,7 @@ Before packaging, put the Arduino's address in `app.json` → `permissions[netwo
 - **CPR copy and targets** (100–120/min, 5–6 cm, 2-min swap, set-up steps) were written from memory — check them against AHA/Red Cross and record the source in `src/guidance.ts`.
 - **Voice on hardware:** recognition runs offline on the phone (Vosk WASM in a Web Worker), restricted to the command words. Not yet verified: WASM/worker support and speed inside the Even app WebView, recognition accuracy with the glasses mic in a noisy room, and false triggers while counting out loud. The 40 MB model also has to ship somehow — bundled in the `.ehpk` (size limit unknown) or downloaded from a whitelisted host.
 - **Pace dot vs. refresh speed** (go/no-go #1): the dot needs ~3.7 text updates per second (bright + dim at 110/min). It is driven from the clock, so it never drifts, and updates are coalesced, so a slow link drops frames instead of lagging. Measure on real glasses; if BLE can't keep up, fall back to flipping once per beat.
+- **Figure animation on hardware:** the figure is a 288×144 image container swapped between two PNG frames (drawn on a canvas at startup, `src/display/frames.ts`) on every half-beat (~3.7 image updates/s). Image updates are much slower than text on the G2, so this may not keep up. Frames are coalesced (late frames are skipped, never queued), and the dot stays the timing reference either way. Measure on real glasses; if it stutters, try a smaller image box or animate only the push frame.
 - **Dot glyph:** drawn with `●` characters; confirm the G2 font has that glyph (the simulator shows a placeholder box if not).
 - **Arduino reachability** (go/no-go #3): not tested — whether the Even app WebView can open a plain `ws://` connection to a LAN device, and the whitelist format for it.
 - **Click events:** a click is assumed to arrive with `eventType` 0 or missing (protobuf default). Confirm on hardware.

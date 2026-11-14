@@ -16,7 +16,7 @@ import {
   type CompressionView,
   type PlacementView,
 } from './coach';
-import type { Page, TextBox } from './display/types';
+import { SCREEN_H, type Page, type TextBox } from './display/types';
 import { DISCLAIMER, SETUP_PAGES, TARGETS } from './guidance';
 import type { SourceStatus } from './sources/types';
 import type { VoiceStatus } from './voice/commands';
@@ -25,7 +25,7 @@ const W = 576;
 
 const header = (content: string): TextBox => ({ name: 'header', x: 0, y: 0, w: W, h: 48, content, color: 3 });
 const cue = (content: string, y = 56, h = 64): TextBox => ({ name: 'cue', x: 0, y, w: W, h, content, border: 2 });
-const footer = (content: string): TextBox => ({ name: 'footer', x: 0, y: 236, w: W, h: 52, content, capture: true, color: 3 });
+const footer = (content: string, y = 236): TextBox => ({ name: 'footer', x: 0, y, w: W, h: SCREEN_H - y, content, capture: true, color: 3 });
 
 /** "Say READY to begin", or a tap fallback when voice isn't working. */
 export function sayReady(voice: VoiceStatus, what: string): string {
@@ -103,7 +103,7 @@ export function readyScreen(view: PlacementView, src: SourceStatus, voice: Voice
     boxes: [
       header(tracking ? 'HANDS IN PLACE' : 'HANDS PLACED (NOT TRACKED)'),
       cue(voice === 'listening' ? 'Say "READY" to start' : 'Tap to start'),
-      { name: 'detail', x: 0, y: 128, w: W, h: 100, content: 'Keep your hands where they are.\nPush in time with the dot.' },
+      { name: 'detail', x: 0, y: 128, w: W, h: 100, content: 'Keep your hands where they are.\nCopy the figure, push with the dot.' },
       footer(voice === 'listening' ? trackingLine(src, view) : sayReady(voice, 'to start')),
     ],
   };
@@ -114,6 +114,9 @@ const D = '●'; // filled circle - confirm the G2 font has it (the simulator sh
 export const DOT = [`  ${D.repeat(3)}`, ` ${D.repeat(5)}`, D.repeat(7), ` ${D.repeat(5)}`, `  ${D.repeat(3)}`].join('\n');
 export const DOT_BRIGHT = 4;
 export const DOT_DIM = 1;
+/** Figure frames (display/frames.ts): pushing while the dot is bright. */
+export const FIGURE_DOWN = 'cpr-down';
+export const FIGURE_UP = 'cpr-up';
 
 export interface CompressState {
   view: CompressionView;
@@ -126,35 +129,43 @@ export interface CompressState {
   handsDrift?: string;
 }
 
-/** One instruction at a time, most important first. */
+/** One instruction at a time, most important first. One line. */
 export function compressAdvice(s: CompressState): string {
   const v = s.view;
-  if (s.src !== 'connected' || v.status === 'lost') return 'NO BRACELET DATA\n\nKeep pushing with the dot';
-  if (v.status === 'waiting') return 'START PUSHING\n\nPush with the dot';
-  if (v.status === 'low_confidence') return 'READING UNCLEAR\n\nKeep pushing with the dot';
-  if (s.handsDrift) return `HANDS DRIFTED\n\n${s.handsDrift}`;
-  if (v.rateBand !== 'ok') return `${rateAdvice(v.rateBand)}\n\nMatch the dot`;
-  if (v.depthBand !== 'ok') return `${depthAdvice(v.depthBand)}\n\nKeep the pace`;
-  return 'GOOD\n\nKeep going';
+  if (s.src !== 'connected' || v.status === 'lost') return 'NO BRACELET DATA - keep pushing with the dot';
+  if (v.status === 'waiting') return 'START PUSHING - copy the figure';
+  if (v.status === 'low_confidence') return 'READING UNCLEAR - keep pushing with the dot';
+  if (s.handsDrift) return `HANDS DRIFTED - ${s.handsDrift.toLowerCase()}`;
+  if (v.rateBand !== 'ok') return `${rateAdvice(v.rateBand)} - match the dot`;
+  if (v.depthBand !== 'ok') return `${depthAdvice(v.depthBand)} - keep the pace`;
+  return 'GOOD - keep going';
 }
 
+/**
+ * Layout (576x288):
+ *   [dot 150x144] [CPR figure image 288x144] [count / swap 132x144]
+ *   [one-line advice, bordered                                    ]
+ *   [rate   depth   pressure                                      ]
+ *   [say STOP to end                                              ]
+ */
 export function compressScreen(s: CompressState): Page {
   const v = s.view;
   const nums = v.status === 'ok'
     ? `${Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     pressure ${Math.round((v.pressure ?? 0) * 100)}%`
     : '-- /min     -- cm     (no reliable data)';
   const swapLeft = TARGETS.swapSeconds - s.elapsedS;
-  const swap = swapLeft > 0 ? `swap in ${mmss(swapLeft)}` : 'SWAP RESCUER NOW';
-  const end = s.voice === 'listening' ? 'say STOP to end' : 'double tap to end';
+  const swap = swapLeft > 0 ? `SWAP IN\n${mmss(swapLeft)}` : 'SWAP\nRESCUER\nNOW';
 
   return {
     layout: 'compress',
     boxes: [
-      { name: 'dot', x: 0, y: 0, w: 168, h: 170, content: DOT, color: s.beatOn ? DOT_BRIGHT : DOT_DIM },
-      { name: 'cue', x: 176, y: 0, w: 400, h: 170, content: compressAdvice(s), border: 2 },
-      { name: 'nums', x: 0, y: 178, w: W, h: 52, content: nums, color: 3 },
-      footer(`Count ${s.count}    ${swap}    ${end}`),
+      { name: 'dot', x: 0, y: 0, w: 150, h: 144, content: DOT, color: s.beatOn ? DOT_BRIGHT : DOT_DIM },
+      { name: 'count', x: 444, y: 0, w: 132, h: 144, content: `COUNT\n${s.count}\n\n${swap}`, color: 3 },
+      { name: 'cue', x: 0, y: 150, w: W, h: 44, content: compressAdvice(s), border: 2 },
+      { name: 'nums', x: 0, y: 198, w: W, h: 40, content: nums, color: 3 },
+      footer(s.voice === 'listening' ? 'Say "STOP" to end' : 'Double tap to end', 240),
     ],
+    images: [{ name: 'figure', x: 152, y: 0, w: 288, h: 144, frame: s.beatOn ? FIGURE_DOWN : FIGURE_UP }],
   };
 }
 

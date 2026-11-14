@@ -14,6 +14,10 @@ class FakeDisplay implements Display {
     this.text = new Map(page.boxes.map((b) => [b.name, b.content]));
   }
   dotColors: number[] = [];
+  figure: string[] = [];
+  async setImage(name: string, frame: string) {
+    if (name === 'figure') this.figure.push(frame);
+  }
   async update(name: string, content: string, color?: number) {
     this.text.set(name, content);
     if (name === 'dot' && color !== undefined) this.dotColors.push(color);
@@ -76,8 +80,9 @@ describe('CoachApp flow', () => {
     expect(source.sent.some((m) => m.type === 'confirm' && m.what === 'start_compressions')).toBe(true);
 
     source.msgs.emit({ type: 'compression', ts: Date.now(), source: 'mock', rate_cpm: 90, depth_cm: 4.2, pressure: 0.6, quality: 'slow', confidence: 0.9 });
-    expect(display.text.get('cue')).toBe('FASTER\n\nMatch the dot');
-    expect(display.text.get('footer')).toContain('Count 1');
+    expect(display.text.get('cue')).toBe('FASTER - match the dot');
+    expect(display.text.get('count')).toContain('COUNT\n1');
+    expect(display.pages[display.pages.length - 1].images![0].name).toBe('figure');
 
     // Bracelet goes silent -> warning, no stale numbers.
     vi.advanceTimersByTime(2000);
@@ -116,6 +121,7 @@ describe('CoachApp flow', () => {
     app.command('ready'); // start
     expect(app.phase).toBe('compress');
     display.dotColors.length = 0;
+    display.figure.length = 0;
     vi.advanceTimersByTime(60000);
     // One bright + one dim update per beat, nothing more.
     const bright = display.dotColors.filter((c) => c === 4).length;
@@ -123,5 +129,8 @@ describe('CoachApp flow', () => {
     expect(bright).toBeGreaterThanOrEqual(109);
     expect(bright).toBeLessThanOrEqual(111);
     expect(Math.abs(bright - dim)).toBeLessThanOrEqual(1);
+    // The figure moves on exactly the same beat as the dot.
+    expect(display.figure.filter((f) => f === 'cpr-down').length).toBe(bright);
+    expect(display.figure.filter((f) => f === 'cpr-up').length).toBe(dim);
   });
 });

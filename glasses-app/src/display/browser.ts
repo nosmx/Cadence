@@ -1,3 +1,4 @@
+import type { FrameStore } from './frames';
 import { SCREEN_H, SCREEN_W, validatePage, type Display, type Page } from './types';
 
 /**
@@ -8,10 +9,14 @@ import { SCREEN_H, SCREEN_W, validatePage, type Display, type Page } from './typ
  */
 export class BrowserDisplay implements Display {
   private boxes = new Map<string, HTMLDivElement>();
+  private images = new Map<string, HTMLImageElement>();
   private screen: HTMLDivElement;
   private errorEl: HTMLDivElement;
 
-  constructor(host: HTMLElement) {
+  constructor(
+    host: HTMLElement,
+    private frames: FrameStore,
+  ) {
     this.screen = document.createElement('div');
     this.screen.className = 'g2-screen';
     this.screen.style.width = `${SCREEN_W}px`;
@@ -26,6 +31,18 @@ export class BrowserDisplay implements Display {
     this.errorEl.textContent = err ? `Layout "${page.layout}": ${err}` : '';
     this.screen.replaceChildren();
     this.boxes.clear();
+    this.images.clear();
+    for (const im of page.images ?? []) {
+      const el = document.createElement('img');
+      el.className = 'g2-image';
+      el.alt = '';
+      Object.assign(el.style, { left: `${im.x}px`, top: `${im.y}px`, width: `${im.w}px`, height: `${im.h}px` });
+      const f = this.frames.get(im.frame);
+      if (f) el.src = f.previewUrl;
+      el.dataset.frame = im.frame;
+      this.screen.append(el);
+      this.images.set(im.name, el);
+    }
     for (const b of page.boxes) {
       const el = document.createElement('div');
       el.className = 'g2-box';
@@ -49,6 +66,14 @@ export class BrowserDisplay implements Display {
     if (el.textContent !== content) el.textContent = content;
     if (color !== undefined) el.style.opacity = String(0.2 + 0.2 * color);
   }
+
+  async setImage(name: string, frame: string): Promise<void> {
+    const el = this.images.get(name);
+    const f = this.frames.get(frame);
+    if (!el || !f || el.dataset.frame === frame) return;
+    el.src = f.previewUrl;
+    el.dataset.frame = frame;
+  }
 }
 
 /** Sends every call to several displays (glasses + phone-screen mirror). */
@@ -59,5 +84,8 @@ export class TeeDisplay implements Display {
   }
   async update(name: string, content: string, color?: number): Promise<void> {
     await Promise.all(this.targets.map((t) => t.update(name, content, color)));
+  }
+  async setImage(name: string, frame: string): Promise<void> {
+    await Promise.all(this.targets.map((t) => t.setImage(name, frame)));
   }
 }

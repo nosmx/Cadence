@@ -23,6 +23,8 @@ import {
   DOT,
   DOT_BRIGHT,
   DOT_DIM,
+  FIGURE_DOWN,
+  FIGURE_UP,
   readyScreen,
   setupScreen,
   splashScreen,
@@ -188,6 +190,9 @@ export class CoachApp {
       if (on === last) return;
       last = on;
       void this.display.update('dot', DOT, on ? DOT_BRIGHT : DOT_DIM);
+      // Figure pushes down while the dot is lit. Image updates are slower than
+      // text; if the link can't keep up, frames are dropped, not delayed.
+      void this.display.setImage('figure', on ? FIGURE_DOWN : FIGURE_UP);
     }, 20);
   }
 
@@ -278,7 +283,7 @@ export class CoachApp {
       this.layout = page.layout;
       void this.display.show(page);
     } else {
-      // The dot is driven by the beat timer, not by data renders.
+      // The dot and figure are driven by the beat timer, not by data renders.
       for (const b of page.boxes) if (b.name !== 'dot') void this.display.update(b.name, b.content);
     }
   }
