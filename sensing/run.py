@@ -197,6 +197,8 @@ def main(argv=None):
     print("Done: %d compressions, %d samples, %d lost, %d clipped%s." % (
         d.count, stats["samples"], d.total_dropped, d.total_clipped,
         ", %d Arduino readings" % chest.count if chest is not None else ", no Arduino"), file=sys.stderr)
+    if chest is not None and hasattr(chest, "diagnosis") and chest.diagnosis():
+        print(chest.diagnosis(), file=sys.stderr)
     if lost:
         print("The band disconnected. Double-tap it and start again.", file=sys.stderr)
 

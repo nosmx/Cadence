@@ -183,10 +183,16 @@ class SerialChestInput(_ThreadedInput):
     """USB serial: one number or one JSON object per line. write(bytes) sends to the
     Arduino on the same port (used when the Arduino is also the hub)."""
 
+    UNREADABLE_WARN = 20            # warn once after this many lines with no distance in them
+
     def __init__(self, port, baud=SERIAL_BAUD, opener=None):
         super().__init__("chest-serial")
+        self.port, self.baud = port, baud
         self._opener = opener or (lambda: __import__("serial").Serial(port, baud, timeout=0.2, write_timeout=0.5))
         self._serial = None
+        self.lines = 0                  # every line received, readable or not
+        self.unreadable = 0
+        self.last_unreadable = None
         self._write_lock = threading.Lock()
         self._start()
 
@@ -199,7 +205,26 @@ class SerialChestInput(_ThreadedInput):
             self._drop()
             raise
         if line:
-            self._add(parse_line(line))
+            self.lines += 1
+            distance = parse_line(line)
+            if distance is None:
+                self.unreadable += 1
+                self.last_unreadable = line[:60]
+                if self.unreadable == self.UNREADABLE_WARN and self.count == 0:
+                    print("chest-serial: the Arduino sends lines but no distance in them, e.g. %r. Wrong speed "
+                          "(baud) or format? Run: python -m sensing.arduino_check %s" % (line[:60], self.port),
+                          file=sys.stderr)
+            self._add(distance)
+
+    def diagnosis(self):
+        """One sentence for the end of the run when no reading arrived, else None."""
+        if self.count:
+            return None
+        if not self.lines:
+            return ("The Arduino sent nothing on %s at %d baud: is the sketch printing with Serial.println? "
+                    "Check with: python -m sensing.arduino_check %s" % (self.port, self.baud, self.port))
+        return ("The Arduino sent %d lines but none held a distance (last: %r). Check the speed and format with: "
+                "python -m sensing.arduino_check %s" % (self.lines, self.last_unreadable, self.port))
 
     def _drop(self):
         try:
