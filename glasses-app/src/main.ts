@@ -104,6 +104,8 @@ async function main(): Promise<void> {
   });
 
   mountPanel(app, source, mock, voice, enableMic, beeper);
+  // Dev server only (stripped from builds): lets scripts drive the app, e.g. demo recordings.
+  if (import.meta.env.DEV) (window as unknown as { cprCoach: unknown }).cprCoach = { app, voice, beeper };
   app.start();
   source.start();
 

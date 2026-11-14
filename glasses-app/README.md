@@ -8,6 +8,8 @@ The app currently runs against a **mock Arduino server** (hand position + bracel
 
 ![Screens (browser preview)](docs/screens.png)
 
+Demo video (browser preview, with the phone beep): [docs/demo.mp4](docs/demo.mp4)
+
 The app is **voice controlled** — the rescuer's hands stay on the chest:
 
 | Say | Does |
