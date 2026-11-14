@@ -1,0 +1,5 @@
+node_modules/
+dist/
+*.ehpk
+public/models/*.tar.gz
+public/models/*.part

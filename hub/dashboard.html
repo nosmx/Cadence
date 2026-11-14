@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadence Dashboard</title>
+<style>
+  :root { --bg:#fff; --fg:#111; --mute:#666; --line:#ddd; --ok:#0a7a33; --warn:#b45309; --bad:#b91c1c; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#111; --fg:#eee; --mute:#999; --line:#333; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171; } }
+  body { background:var(--bg); color:var(--fg); font:15px/1.4 system-ui, sans-serif; margin:0 auto; max-width:900px; padding:16px; }
+  .banner { border:1px solid var(--line); padding:6px 10px; color:var(--mute); font-size:13px; }
+  h1 { font-size:20px; margin:12px 0 4px; }
+  .row { display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .stat { border:1px solid var(--line); padding:8px 12px; min-width:90px; }
+  .stat b { display:block; font-size:24px; font-variant-numeric:tabular-nums; }
+  .stat span { color:var(--mute); font-size:12px; }
+  #status { font-weight:600; min-height:1.4em; }
+  .ok { color:var(--ok) } .warn { color:var(--warn) } .bad { color:var(--bad) }
+  button { font:inherit; padding:4px 10px; border:1px solid var(--line); background:transparent; color:var(--fg); cursor:pointer; }
+  button.on { border-color:var(--fg); font-weight:600; }
+  input { font:inherit; padding:4px 8px; flex:1; min-width:0; border:1px solid var(--line); background:transparent; color:var(--fg); }
+  ol { padding-left:0; list-style:none; }
+  li { border-bottom:1px solid var(--line); padding:8px 0; display:flex; gap:10px; align-items:baseline; flex-wrap:wrap; }
+  li .t { color:var(--mute); font-variant-numeric:tabular-nums; width:56px; }
+  li.proposed { opacity:.6 } li.rejected { text-decoration:line-through; opacity:.4 }
+  li small { color:var(--mute); flex-basis:100%; padding-left:66px; }
+</style>
+</head>
+<body>
+<div class="banner">Training tool for manikin practice. Not a medical device.</div>
+<h1>Cadence session</h1>
+
+<div class="row" id="phases"></div>
+<div id="status"></div>
+<div class="row">
+  <div class="stat"><b id="count">–</b><span>compressions</span></div>
+  <div class="stat"><b id="rate">–</b><span>rate /min</span></div>
+  <div class="stat"><b id="depth">–</b><span>depth cm (est.)</span></div>
+  <div class="stat"><b id="quality">–</b><span>cue</span></div>
+  <div class="stat"><b id="hr">–</b><span>rescuer HR</span></div>
+  <div class="stat"><b id="place">–</b><span>hands</span></div>
+  <div class="stat"><b id="band">–</b><span id="band-sub">band</span></div>
+</div>
+
+<h2 style="font-size:16px">Timeline</h2>
+<form class="row" id="voice"><input id="note" placeholder="Type a voice note to test, e.g. “AED is here, pads on”"><button>Log</button></form>
+<ol id="log"></ol>
+
+<script>
+const $ = id => document.getElementById(id);
+const PHASES = ["check", "call", "position", "compress", "aed"];
+let phase = "check", lastComp = 0, lowConf = false, count = 0;  // lastComp: local ms when last compression arrived
+const MIN_CONF = 0.6, STALE_S = 1.5;  // same as glasses-app/src/coach.ts LIMITS
+const post = m => fetch("/msg", {method: "POST", headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({...m, ts: Date.now(), source: "dashboard"})});
+
+PHASES.forEach(p => {
+  const b = document.createElement("button");
+  b.textContent = p; b.id = "p-" + p; b.onclick = () => post({type: "state", phase: p});
+  $("phases").append(b);
+});
+const fmt = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+
+function entry(m) {
+  let li = $("e-" + m.id);
+  if (!li) { li = document.createElement("li"); li.id = "e-" + m.id; $("log").append(li); }
+  li.className = m.status;
+  li.innerHTML = "";
+  const t = document.createElement("span"); t.className = "t"; t.textContent = fmt(m.at ?? m.t);
+  const ev = document.createElement("b"); ev.textContent = m.event;
+  const d = document.createElement("span"); d.textContent = m.detail || "";
+  li.append(t, ev, d);
+  if (m.status === "proposed") {
+    for (const s of ["confirmed", "rejected"]) {
+      const b = document.createElement("button"); b.textContent = s === "confirmed" ? "Confirm" : "Reject";
+      b.onclick = () => post({type: "log_entry", id: m.id, status: s}); li.append(b);
+    }
+  }
+  const said = document.createElement("small"); said.textContent = `said: “${m.said}” · ${m.status}`; li.append(said);
+}
+
+const es = new EventSource("/events");
+es.onmessage = e => {
+  const m = JSON.parse(e.data);
+  if (m.type === "state") {
+    if (m.phase === "compress" && phase !== "compress") count = 0;
+    phase = m.phase;
+    PHASES.forEach(p => $("p-" + p).classList.toggle("on", p === phase));
+  } else if (m.type === "compression") {
+    lastComp = Date.now(); lowConf = m.confidence < MIN_CONF;
+    $("count").textContent = ++count;
+    $("rate").textContent = lowConf || m.rate_cpm == null ? "?" : Math.round(m.rate_cpm);
+    $("depth").textContent = lowConf || m.depth_cm == null ? "?" : m.depth_cm.toFixed(1);
+    $("quality").textContent = lowConf || !m.quality ? "?" : m.quality.toUpperCase();
+  } else if (m.type === "vitals") $("hr").textContent = m.hr_bpm;
+  else if (m.type === "placement")
+    $("place").textContent = m.on_target ? "on spot" : m.direction ? `→ ${m.direction}` : "off spot";
+  else if (m.type === "log_entry") entry(m);
+  else if (m.type === "status" || m.type === "heartbeat") {  // band, sensing/messages.py
+    $("band").textContent = m.connected ? (m.battery_percent ?? "?") + "%" : m.reconnecting ? "…" : "off";
+    $("band-sub").textContent = "band" + (m.connected ? "" : " not connected") + (m.arduino_ok ? " + arduino" : "");
+  }
+};
+es.onerror = () => { $("status").textContent = "Hub disconnected"; $("status").className = "bad"; };
+
+setInterval(() => {  // fail visibly: same rules the glasses follow (PROTOCOL.md)
+  const s = $("status"), age = (Date.now() - lastComp) / 1000;
+  if (es.readyState !== 1) return;
+  if (phase === "compress" && (!lastComp || age > STALE_S)) { s.textContent = "SENSOR LOST"; s.className = "bad"; }
+  else if (phase === "compress" && lowConf) { s.textContent = "LOW SIGNAL"; s.className = "warn"; }
+  else { s.textContent = phase === "compress" ? "Sensor OK" : ""; s.className = "ok"; }
+}, 250);
+
+$("voice").onsubmit = e => {
+  e.preventDefault();
+  if ($("note").value.trim()) post({type: "voice_event", phrase: $("note").value.trim()});
+  $("note").value = "";
+};
+</script>
+</body>
+</html>
