@@ -35,6 +35,7 @@ MODEL = "gpt-5-mini"
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DASHBOARD = Path(__file__).with_name("dashboard.html")
 DISTANCE = Path(__file__).with_name("distance.html")  # live band <-> UNO Q signal page
+LIVE = Path(__file__).with_name("live.html")  # live coach page: band pushes -> FASTER / PUSH HARDER / GOOD
 
 CLIENT = None  # set by make_client() at startup; tests leave it None (raw-text entries)
 # Spend caps. Over a cap the note is still logged, as raw text (llm: false).
@@ -205,6 +206,9 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path in ("/cpr", "/distance"):
             self._head(200, "text/html; charset=utf-8")
             self.wfile.write(DISTANCE.read_bytes())
+        elif self.path in ("/live", "/coach"):
+            self._head(200, "text/html; charset=utf-8")
+            self.wfile.write(LIVE.read_bytes())
         elif self.path == "/snapshot":
             self._json(200, snapshot())
         elif self.path == "/events":

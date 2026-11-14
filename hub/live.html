@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CPR Live Coach</title>
+<style>
+  :root {
+    --bg: #f6f5f2; --card: #ffffff; --ink: #1c1c1a; --muted: #6b6a66; --line: #e4e2dc;
+    --good: #1f8a4c; --warn: #c2410c; --idle: #8a8983; --depth: #2f6fdf; --spike: #d97706; --band: rgba(31,138,76,.12);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121211; --card: #1c1c1b; --ink: #f0efea; --muted: #9a9890; --line: #2e2d2a;
+            --good: #4cc27f; --warn: #fb923c; --idle: #77766f; --depth: #7aa7ff; --spike: #fbbf24; --band: rgba(76,194,127,.14); }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 16px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin: 0 0 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px; margin-bottom: 14px; }
+  #cuecard { text-align: center; padding: 28px 16px; border-width: 3px; transition: border-color .15s; }
+  #cue { font-size: clamp(48px, 13vw, 104px); font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+  #why { color: var(--muted); margin-top: 10px; min-height: 1.4em; }
+  .good { color: var(--good); border-color: var(--good) !important; }
+  .warn { color: var(--warn); border-color: var(--warn) !important; }
+  .idle { color: var(--idle); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stats b { display: block; font-size: 30px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .stats span { color: var(--muted); font-size: 13px; }
+  .stats em { font-style: normal; font-size: 13px; font-weight: 600; }
+  canvas { width: 100%; height: 220px; display: block; }
+  .legend { color: var(--muted); font-size: 13px; margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: -1px; }
+  .note { color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>CPR Coach · live from band 27</h1>
+  <p class="sub">Push on the pillow with the band on your wrist. <span id="state">Connecting…</span></p>
+
+  <div class="card idle" id="cuecard">
+    <div id="cue">PUSH</div>
+    <div id="why">Waiting for pushes</div>
+  </div>
+
+  <div class="card stats">
+    <div><b id="rate">–</b><span>pushes / min · aim 100–120</span></div>
+    <div><b id="depth">–</b><span>depth cm · aim 5–6</span></div>
+    <div><b id="spike">–</b><span>spike g · <em id="feel"></em></span></div>
+    <div><b id="count">0</b><span>pushes</span></div>
+  </div>
+
+  <div class="card">
+    <canvas id="chart"></canvas>
+    <div class="legend">last 30 pushes <i style="background:var(--depth)"></i>depth (cm, left)
+      <i style="background:var(--spike)"></i>spike (g, right) <i style="background:var(--band)"></i>5–6 cm target</div>
+  </div>
+
+  <p class="note">Depth is an estimate from the band's accelerometer until calibrated
+    (<code>python -m sensing.calibrate 27 depth</code>). The spike is how sharply your wrist hits on each push;
+    "harder / softer" compares it with your own good pushes. Training tool, not a medical device.</p>
+</main>
+<script>
+// Cues are Person 1's rule label (sensing/quality.py), shown as is: no LLM, no extra logic here.
+const CUE = { faster: "FASTER", slower: "SLOWER", harder: "PUSH HARDER", lighter: "PUSH LIGHTER",
+              "release fully": "LET IT COME UP", good: "GOOD" };
+const WHY = { faster: "Too slow: speed up to 100–120 a minute", slower: "Too fast: slow down to 100–120 a minute",
+              harder: "Too shallow: push deeper, 5–6 cm", lighter: "Too deep: ease off, 5–6 cm",
+              "release fully": "Let the chest come all the way back up", good: "Rate and depth on target" };
+const LOST_MS = 1500;   // same as the glasses: no push for 1.5 s = stopped
+const $ = (id) => document.getElementById(id);
+const pushes = [];      // {depth, spike}
+let last = null, lastAt = 0, lastCount = null, band = null;
+
+const es = new EventSource("/events");
+es.onopen = () => state("Hub connected, waiting for the band…", false);
+es.onerror = () => state("Hub not reachable", false);
+es.onmessage = (e) => {
+  const m = JSON.parse(e.data);
+  if (m.type === "status" && "connected" in m) band = m;
+  if (m.type !== "compression") return;
+  if (Date.now() - (m.ts || 0) > 3000) return;   // the hub replays the last one on connect: too old to coach on
+  last = m; lastAt = Date.now();
+  if (m.count !== lastCount) {
+    lastCount = m.count;
+    pushes.push({ depth: m.depth_cm, spike: m.push_intensity_g });
+    if (pushes.length > 30) pushes.shift();
+  }
+};
+
+function state(text, ok) { $("state").textContent = text; $("state").style.color = ok ? "var(--good)" : "var(--warn)"; }
+const fmt = (v, d) => v == null ? "–" : v.toFixed(d);
+
+function render() {
+  const stopped = !last || Date.now() - lastAt > LOST_MS;
+  if (band && band.connected === false) state("Band 27 disconnected", false);
+  else if (last && !stopped) state("Live", true);
+  else if (last) state("Band connected, no pushes", false);
+
+  const card = $("cuecard");
+  if (stopped) {
+    $("cue").textContent = last ? "KEEP PUSHING" : "PUSH";
+    $("why").textContent = last ? "No push for over 1.5 s" : "Waiting for pushes";
+    card.className = last ? "card warn" : "card idle";
+  } else if (!last.quality) {
+    $("cue").textContent = "…"; $("why").textContent = "Reading your rhythm";
+    card.className = "card idle";
+  } else {
+    $("cue").textContent = CUE[last.quality] || last.quality.toUpperCase();
+    $("why").textContent = (WHY[last.quality] || "") + (last.confidence < 0.6 ? " · reading unclear" : "");
+    card.className = "card " + (last.quality === "good" ? "good" : "warn");
+  }
+  if (last) {
+    $("rate").textContent = fmt(last.rate_cpm, 0);
+    $("depth").textContent = fmt(last.depth_cm, 1);
+    $("spike").textContent = fmt(last.push_intensity_g, 2);
+    $("count").textContent = last.count ?? 0;
+    const p = last.push_intensity;   // 0..1 against your own good pushes
+    $("feel").textContent = p == null ? "" : p >= 0.75 ? "harder than your normal" : p <= 0.25 ? "softer than your normal" : "your normal";
+  }
+  draw();
+}
+
+function draw() {
+  const c = $("chart"), dpr = devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  c.width = w * dpr; c.height = h * dpr;
+  const g = c.getContext("2d"); g.scale(dpr, dpr);
+  const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n);
+  const pad = 28, plotW = w - 2 * pad, DMAX = 8, SMAX = 1.0;
+  const y = (v, max) => h - 16 - Math.min(v, max) / max * (h - 26);
+  g.fillStyle = col("--band"); g.fillRect(pad, y(6, DMAX), plotW, y(5, DMAX) - y(6, DMAX));
+  g.font = "11px sans-serif"; g.strokeStyle = col("--line"); g.fillStyle = col("--muted"); g.lineWidth = 1;
+  for (let d = 0; d <= DMAX; d += 2) {
+    g.beginPath(); g.moveTo(pad, y(d, DMAX)); g.lineTo(w - pad, y(d, DMAX)); g.stroke();
+    g.fillText(d, 6, y(d, DMAX) + 4);
+    g.fillText((d / DMAX * SMAX).toFixed(2), w - pad + 4, y(d, DMAX) + 4);
+  }
+  const slot = plotW / 30;
+  g.fillStyle = col("--depth");
+  pushes.forEach((p, i) => { if (p.depth != null) g.fillRect(pad + i * slot + slot * 0.2, y(p.depth, DMAX), slot * 0.6, h - 16 - y(p.depth, DMAX)); });
+  g.strokeStyle = col("--spike"); g.fillStyle = col("--spike"); g.lineWidth = 2; g.beginPath();
+  let started = false;
+  pushes.forEach((p, i) => {
+    if (p.spike == null) return;
+    const px = pad + (i + 0.5) * slot, py = y(p.spike, SMAX);
+    started ? g.lineTo(px, py) : g.moveTo(px, py); started = true;
+  });
+  g.stroke();
+  pushes.forEach((p, i) => { if (p.spike != null) { g.beginPath(); g.arc(pad + (i + 0.5) * slot, y(p.spike, SMAX), 3, 0, 7); g.fill(); } });
+}
+setInterval(render, 100); render();
+</script>
+</body>
+</html>
