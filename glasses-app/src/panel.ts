@@ -9,6 +9,7 @@ import type { OutboundMsg, PlacementMsg } from './protocol';
 import type { MockSource } from './sources/mock';
 import type { MessageSource } from './sources/types';
 import type { VoskVoice } from './voice/vosk';
+import type { PhoneBeeper } from './beeper';
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -18,6 +19,7 @@ export function mountPanel(
   mock: MockSource | null,
   voice: VoskVoice,
   enableMic: (() => Promise<void>) | null,
+  beeper: PhoneBeeper,
 ): void {
   const phaseEl = $('phase');
   const sourceEl = $('source');
@@ -61,6 +63,19 @@ export function mountPanel(
   setInterval(showVoice, 500);
   showVoice();
   voice.heard.on(({ command, text }) => log(`heard "${text}" -> ${command}`));
+
+  // Phone beep on each beat.
+  const beepOn = $<HTMLInputElement>('beep-on');
+  const beepStatus = $('beep-status');
+  beepOn.checked = beeper.enabled;
+  beepOn.addEventListener('change', () => (beeper.enabled = beepOn.checked));
+  $('beep-test').addEventListener('click', () => beeper.test());
+  const showBeep = () => {
+    const st = beeper.state;
+    beepStatus.textContent = st === 'running' ? 'sound ready' : st === 'locked' ? 'tap anywhere here to allow sound' : 'no audio on this device';
+  };
+  setInterval(showBeep, 500);
+  showBeep();
 
   const micBtn = $<HTMLButtonElement>('enable-mic');
   if (!enableMic) micBtn.hidden = true;

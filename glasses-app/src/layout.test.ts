@@ -11,7 +11,6 @@ import { SETUP_PAGES } from './guidance';
 import {
   alignScreen,
   compressScreen,
-  DOT,
   readyScreen,
   setupScreen,
   splashScreen,
@@ -75,10 +74,4 @@ describe('every screen fits the G2 display', () => {
       });
     }
   }
-
-  it('pace diamond is centred: top/bottom dot sits over the middle dot', () => {
-    const [top, mid] = DOT.split('\n');
-    const m = measureTextWrap(`${top}\n${mid}`, 1000);
-    expect(m.lineWidths[0]).toBe((m.lineWidths[1] / 3) * 2); // indent (1 dot) + dot = 2 of 3 dots
-  });
 });

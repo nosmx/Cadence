@@ -2,7 +2,7 @@
  * CPR Coach glasses app: phase state machine + render loop.
  *
  * Flow: splash -> setup (body positioning, 3 pages) -> align (Arduino hand tracking,
- *       advances by itself) -> ready -> compress (pace dot + live bracelet feedback)
+ *       advances by itself) -> ready -> compress (pace circle + beep + live bracelet feedback)
  *       -> summary.
  *
  * Control is by voice so the rescuer never lifts their hands:
@@ -20,9 +20,8 @@ import type { CompressionMsg, InboundMsg, OutboundMsg, PlacementMsg } from './pr
 import {
   alignScreen,
   compressScreen,
-  DOT,
-  DOT_BRIGHT,
-  DOT_DIM,
+  BEAT_OFF,
+  BEAT_ON,
   FIGURE_DOWN,
   FIGURE_UP,
   readyScreen,
@@ -31,6 +30,7 @@ import {
   summaryScreen,
   type Summary,
 } from './screens';
+import type { Metronome } from './beeper';
 import type { MessageSource } from './sources/types';
 import type { Command, VoiceStatus } from './voice/commands';
 
@@ -41,7 +41,7 @@ type Action = 'next' | 'back' | 'end';
 
 /** Off target this long while on the ready screen => go back to aligning. */
 const READY_DRIFT_MS = 1000;
-/** Fraction of each beat the dot is bright. */
+/** Fraction of each beat the circle is lit. */
 const BEAT_ON_FRACTION = 0.4;
 
 export class CoachApp {
@@ -62,6 +62,7 @@ export class CoachApp {
   private stats = { confident: 0, rateOk: 0, depthOk: 0 };
   private summary?: Summary;
   private beatTimer?: ReturnType<typeof setInterval>;
+  private metronome?: Metronome;
 
   private layout = '';
   private listeners: ((phase: Phase) => void)[] = [];
@@ -81,6 +82,11 @@ export class CoachApp {
 
   onPhaseChange(cb: (phase: Phase) => void): void {
     this.listeners.push(cb);
+  }
+
+  /** Audible beat (phone beep) that follows the same clock as the pace circle. */
+  setMetronome(m: Metronome): void {
+    this.metronome = m;
   }
 
   setVoiceStatus(s: VoiceStatus): void {
@@ -173,9 +179,9 @@ export class CoachApp {
     this.go('summary');
   }
 
-  // --- Pace dot ----------------------------------------------------------------
+  // --- Pace circle, figure and phone beep --------------------------------------
 
-  /** Is the dot bright right now? Derived from the clock, so it never drifts. */
+  /** Is the circle lit right now? Derived from the clock, so it never drifts. */
   private beatOn(): boolean {
     const beatMs = 60000 / TARGETS.metronomeBpm;
     return ((this.now() - this.startedAt) % beatMs) / beatMs < BEAT_ON_FRACTION;
@@ -183,20 +189,22 @@ export class CoachApp {
 
   private startBeat(): void {
     this.stopBeat();
+    this.metronome?.start(this.startedAt, TARGETS.metronomeBpm);
     let last: boolean | undefined;
     // Poll fast but only send when the state flips (~2 updates per beat).
     this.beatTimer = setInterval(() => {
       const on = this.beatOn();
       if (on === last) return;
       last = on;
-      void this.display.update('dot', DOT, on ? DOT_BRIGHT : DOT_DIM);
-      // Figure pushes down while the dot is lit. Image updates are slower than
+      // Circle first (timing cue), then the figure. Image updates are slower than
       // text; if the link can't keep up, frames are dropped, not delayed.
+      void this.display.setImage('beat', on ? BEAT_ON : BEAT_OFF);
       void this.display.setImage('figure', on ? FIGURE_DOWN : FIGURE_UP);
     }, 20);
   }
 
   private stopBeat(): void {
+    this.metronome?.stop();
     clearInterval(this.beatTimer);
     this.beatTimer = undefined;
   }
@@ -283,8 +291,8 @@ export class CoachApp {
       this.layout = page.layout;
       void this.display.show(page);
     } else {
-      // The dot and figure are driven by the beat timer, not by data renders.
-      for (const b of page.boxes) if (b.name !== 'dot') void this.display.update(b.name, b.content);
+      // Images (circle, figure) are driven by the beat timer, not by data renders.
+      for (const b of page.boxes) void this.display.update(b.name, b.content);
     }
   }
 }

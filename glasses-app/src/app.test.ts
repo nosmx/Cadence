@@ -13,14 +13,14 @@ class FakeDisplay implements Display {
     this.pages.push(page);
     this.text = new Map(page.boxes.map((b) => [b.name, b.content]));
   }
-  dotColors: number[] = [];
+  beat: string[] = [];
   figure: string[] = [];
   async setImage(name: string, frame: string) {
+    if (name === 'beat') this.beat.push(frame);
     if (name === 'figure') this.figure.push(frame);
   }
-  async update(name: string, content: string, color?: number) {
+  async update(name: string, content: string, _color?: number) {
     this.text.set(name, content);
-    if (name === 'dot' && color !== undefined) this.dotColors.push(color);
   }
 }
 
@@ -80,9 +80,9 @@ describe('CoachApp flow', () => {
     expect(source.sent.some((m) => m.type === 'confirm' && m.what === 'start_compressions')).toBe(true);
 
     source.msgs.emit({ type: 'compression', ts: Date.now(), source: 'mock', rate_cpm: 90, depth_cm: 4.2, pressure: 0.6, quality: 'slow', confidence: 0.9 });
-    expect(display.text.get('cue')).toBe('FASTER - match the dot');
+    expect(display.text.get('cue')).toBe('FASTER - match the circle');
     expect(display.text.get('count')).toContain('COUNT 1');
-    expect(display.pages[display.pages.length - 1].images![0].name).toBe('figure');
+    expect(display.pages[display.pages.length - 1].images!.map((i) => i.name)).toEqual(['beat', 'figure']);
 
     // Bracelet goes silent -> warning, no stale numbers.
     vi.advanceTimersByTime(2000);
@@ -109,10 +109,12 @@ describe('CoachApp flow', () => {
     expect(app.phase).toBe('ready');
   });
 
-  it('pulses the pace dot at 110 bpm during compressions', () => {
+  it('flashes the circle, moves the figure and beeps on the same 110 bpm beat', () => {
     const display = new FakeDisplay();
     const source = new FakeSource();
     const app = new CoachApp(display, source, () => Date.now());
+    const metronome = { starts: [] as [number, number][], stops: 0 };
+    app.setMetronome({ start: (t, bpm) => metronome.starts.push([t, bpm]), stop: () => metronome.stops++ });
     app.start();
     app.setVoiceStatus('listening');
     app.command('ready');
@@ -120,17 +122,23 @@ describe('CoachApp flow', () => {
     app.command('ready'); // no tracking -> continue
     app.command('ready'); // start
     expect(app.phase).toBe('compress');
-    display.dotColors.length = 0;
+    // The phone beeper is started at 110 bpm on the same clock as the circle.
+    expect(metronome.starts).toHaveLength(1);
+    expect(metronome.starts[0][1]).toBe(110);
+
+    display.beat.length = 0;
     display.figure.length = 0;
     vi.advanceTimersByTime(60000);
-    // One bright + one dim update per beat, nothing more.
-    const bright = display.dotColors.filter((c) => c === 4).length;
-    const dim = display.dotColors.filter((c) => c === 1).length;
-    expect(bright).toBeGreaterThanOrEqual(109);
-    expect(bright).toBeLessThanOrEqual(111);
-    expect(Math.abs(bright - dim)).toBeLessThanOrEqual(1);
-    // The figure moves on exactly the same beat as the dot.
-    expect(display.figure.filter((f) => f === 'cpr-down').length).toBe(bright);
-    expect(display.figure.filter((f) => f === 'cpr-up').length).toBe(dim);
+    const on = display.beat.filter((f) => f === 'beat-on').length;
+    const off = display.beat.filter((f) => f === 'beat-off').length;
+    expect(on).toBeGreaterThanOrEqual(109);
+    expect(on).toBeLessThanOrEqual(111);
+    expect(Math.abs(on - off)).toBeLessThanOrEqual(1);
+    // The figure moves on exactly the same beats as the circle.
+    expect(display.figure.filter((f) => f === 'cpr-down').length).toBe(on);
+    expect(display.figure.filter((f) => f === 'cpr-up').length).toBe(off);
+
+    app.command('stop');
+    expect(metronome.stops).toBeGreaterThan(0);
   });
 });

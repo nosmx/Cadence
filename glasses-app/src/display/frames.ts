@@ -1,8 +1,9 @@
 /**
  * Bitmaps for image containers, drawn at startup on a canvas (no asset files).
  *
- * The CPR figure has two frames - "up" (arms straight, shoulders high) and
- * "down" (pushing, chest compressed) - swapped in time with the pace dot.
+ * - Pace circle: "beat-on" (filled disc) / "beat-off" (dim ring), flashed on each beat.
+ * - CPR figure: "cpr-up" (arms straight, shoulders high) / "cpr-down" (pushing,
+ *   chest compressed), swapped in time with the circle.
  *
  * The glasses get PNG bytes (white on black; the host converts to 4-bit grey and
  * the display tints it green). The browser preview gets a green version.
@@ -19,6 +20,25 @@ export type FrameStore = Map<string, Frame>;
 
 export const FIGURE_W = 288;
 export const FIGURE_H = 144;
+export const BEAT_SIZE = 124;
+
+/** Pace circle: a big filled disc on the beat, a dim ring between beats (so it never vanishes). */
+export function drawBeatCircle(ctx: CanvasRenderingContext2D, on: boolean, color: string, dim: string): void {
+  const c = BEAT_SIZE / 2;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, BEAT_SIZE, BEAT_SIZE);
+  ctx.beginPath();
+  if (on) {
+    ctx.arc(c, c, c - 2, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  } else {
+    ctx.arc(c, c, c - 6, 0, Math.PI * 2);
+    ctx.strokeStyle = dim;
+    ctx.lineWidth = 6;
+    ctx.stroke();
+  }
+}
 
 /**
  * Draw one frame. `push` = 0 (top of stroke) .. 1 (bottom of stroke).
@@ -114,22 +134,29 @@ export function drawCprFigure(ctx: CanvasRenderingContext2D, push: number, color
   }
 }
 
-async function render(push: number, color: string, dim: string): Promise<Blob> {
+type Draw = (ctx: CanvasRenderingContext2D, color: string, dim: string) => void;
+
+async function render(w: number, h: number, draw: Draw, color: string, dim: string): Promise<Blob> {
   const canvas = document.createElement('canvas');
-  canvas.width = FIGURE_W;
-  canvas.height = FIGURE_H;
-  const ctx = canvas.getContext('2d')!;
-  drawCprFigure(ctx, push, color, dim);
+  canvas.width = w;
+  canvas.height = h;
+  draw(canvas.getContext('2d')!, color, dim);
   return new Promise((resolve, reject) =>
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('canvas.toBlob failed'))), 'image/png'),
   );
 }
 
 export async function buildFrames(): Promise<FrameStore> {
+  const specs: [string, number, number, Draw][] = [
+    ['beat-on', BEAT_SIZE, BEAT_SIZE, (c, col, dim) => drawBeatCircle(c, true, col, dim)],
+    ['beat-off', BEAT_SIZE, BEAT_SIZE, (c, col, dim) => drawBeatCircle(c, false, col, dim)],
+    ['cpr-up', FIGURE_W, FIGURE_H, (c, col, dim) => drawCprFigure(c, 0, col, dim)],
+    ['cpr-down', FIGURE_W, FIGURE_H, (c, col, dim) => drawCprFigure(c, 1, col, dim)],
+  ];
   const store: FrameStore = new Map();
-  for (const [name, push] of [['cpr-up', 0], ['cpr-down', 1]] as const) {
-    const png = new Uint8Array(await (await render(push, '#ffffff', '#909090')).arrayBuffer());
-    const previewUrl = URL.createObjectURL(await render(push, '#3dff7a', '#1f8a42'));
+  for (const [name, w, h, draw] of specs) {
+    const png = new Uint8Array(await (await render(w, h, draw, '#ffffff', '#909090')).arrayBuffer());
+    const previewUrl = URL.createObjectURL(await render(w, h, draw, '#3dff7a', '#1f8a42'));
     store.set(name, { png, previewUrl });
   }
   return store;

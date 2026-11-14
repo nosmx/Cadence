@@ -103,28 +103,19 @@ export function readyScreen(view: PlacementView, src: SourceStatus, voice: Voice
     boxes: [
       header(tracking ? 'HANDS IN PLACE' : 'HANDS PLACED (NOT TRACKED)'),
       cue(voice === 'listening' ? 'Say "READY" to start' : 'Tap to start'),
-      { name: 'detail', x: 0, y: 128, w: W, h: 100, content: 'Keep your hands where they are.\nCopy the figure, push with the dot.' },
+      { name: 'detail', x: 0, y: 128, w: W, h: 100, content: 'Keep your hands where they are.\nPush each time the circle flashes.' },
       footer(voice === 'listening' ? trackingLine(src, view) : sayReady(voice, 'to start')),
     ],
   };
 }
 
-/** Pace dot, drawn with text (no image refresh needed). Pulses bright/dim. */
 /**
- * Pace marker: a small diamond of 5 dots.
- *    ●
- *   ●●●
- *    ●
- * In the G2 font (measured with @evenrealities/pretext) '●' and the full-width
- * space U+3000 are both exactly 20 px, so one U+3000 centres the top and bottom
- * dots over the middle row. The diamond is 60 x 81 px (3 lines x 27 px).
+ * Pace circle and CPR figure, both image containers (frames in display/frames.ts).
+ * On each beat the circle fills and the figure pushes down; between beats the
+ * circle is a dim ring and the figure comes back up. The phone beeps on the beat.
  */
-const D = '\u25CF';
-const FW_SPACE = '\u3000';
-export const DOT = [`${FW_SPACE}${D}`, D.repeat(3), `${FW_SPACE}${D}`].join('\n');
-export const DOT_BRIGHT = 4;
-export const DOT_DIM = 1;
-/** Figure frames (display/frames.ts): pushing while the dot is bright. */
+export const BEAT_ON = 'beat-on';
+export const BEAT_OFF = 'beat-off';
 export const FIGURE_DOWN = 'cpr-down';
 export const FIGURE_UP = 'cpr-up';
 
@@ -142,18 +133,18 @@ export interface CompressState {
 /** One instruction at a time, most important first. One line. */
 export function compressAdvice(s: CompressState): string {
   const v = s.view;
-  if (s.src !== 'connected' || v.status === 'lost') return 'NO BRACELET DATA - keep pushing with the dot';
-  if (v.status === 'waiting') return 'START PUSHING - copy the figure';
-  if (v.status === 'low_confidence') return 'READING UNCLEAR - keep pushing with the dot';
+  if (s.src !== 'connected' || v.status === 'lost') return 'NO BRACELET DATA - keep pushing with the circle';
+  if (v.status === 'waiting') return 'START PUSHING - push when the circle flashes';
+  if (v.status === 'low_confidence') return 'READING UNCLEAR - keep pushing with the circle';
   if (s.handsDrift) return `HANDS DRIFTED - ${s.handsDrift.toLowerCase()}`;
-  if (v.rateBand !== 'ok') return `${rateAdvice(v.rateBand)} - match the dot`;
+  if (v.rateBand !== 'ok') return `${rateAdvice(v.rateBand)} - match the circle`;
   if (v.depthBand !== 'ok') return `${depthAdvice(v.depthBand)} - keep the pace`;
   return 'GOOD - keep going';
 }
 
 /**
  * Layout (576x288):
- *   [dot 150x144] [CPR figure image 288x144] [count / swap 132x144]
+ *   [circle 124x124] [CPR figure image 288x144] [count / swap 132x144]
  *   [one-line advice, bordered                                    ]
  *   [rate   depth   pressure                                      ]
  *   [say STOP to end                                              ]
@@ -169,14 +160,16 @@ export function compressScreen(s: CompressState): Page {
   return {
     layout: 'compress',
     boxes: [
-      // 60x81 diamond + 6 px padding, centred in the 150x144 area left of the figure.
-      { name: 'dot', x: 37, y: 25, w: 76, h: 95, content: DOT, color: s.beatOn ? DOT_BRIGHT : DOT_DIM },
       { name: 'count', x: 444, y: 0, w: 132, h: 144, content: `COUNT ${s.count}\n\n${swap}`, color: 3 },
       { name: 'cue', x: 0, y: 150, w: W, h: 44, content: compressAdvice(s), border: 2 },
       { name: 'nums', x: 0, y: 198, w: W, h: 40, content: nums, color: 3 },
       footer(s.voice === 'listening' ? 'Say "STOP" to end' : 'Double tap to end', 240),
     ],
-    images: [{ name: 'figure', x: 152, y: 0, w: 288, h: 144, frame: s.beatOn ? FIGURE_DOWN : FIGURE_UP }],
+    // The circle is listed first so it is sent first on each beat (it is the timing cue).
+    images: [
+      { name: 'beat', x: 13, y: 10, w: 124, h: 124, frame: s.beatOn ? BEAT_ON : BEAT_OFF },
+      { name: 'figure', x: 152, y: 0, w: 288, h: 144, frame: s.beatOn ? FIGURE_DOWN : FIGURE_UP },
+    ],
   };
 }
 

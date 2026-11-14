@@ -1,5 +1,6 @@
 import { AudioInputSource, waitForEvenAppBridge, type EvenAppBridge } from '@evenrealities/even_hub_sdk';
 import { CoachApp, type Input } from './app';
+import { PhoneBeeper } from './beeper';
 import { BrowserDisplay, TeeDisplay } from './display/browser';
 import { EvenDisplay } from './display/even';
 import { buildFrames } from './display/frames';
@@ -51,6 +52,13 @@ async function main(): Promise<void> {
 
   const app = new CoachApp(display, source);
 
+  // Phone beep on each beat. Sound needs a user gesture first, so unlock on the first tap.
+  const beeper = new PhoneBeeper();
+  app.setMetronome(beeper);
+  const unlockAudio = () => void beeper.unlock();
+  window.addEventListener('pointerdown', unlockAudio);
+  window.addEventListener('keydown', unlockAudio);
+
   // --- Voice ---------------------------------------------------------------
   const voice = new VoskVoice();
   // In a plain browser the computer mic needs a click to start, so don't claim
@@ -95,7 +103,7 @@ async function main(): Promise<void> {
     }
   });
 
-  mountPanel(app, source, mock, voice, enableMic);
+  mountPanel(app, source, mock, voice, enableMic, beeper);
   app.start();
   source.start();
 
