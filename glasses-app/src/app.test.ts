@@ -81,7 +81,7 @@ describe('CoachApp flow', () => {
 
     source.msgs.emit({ type: 'compression', ts: Date.now(), source: 'mock', rate_cpm: 90, depth_cm: 4.2, pressure: 0.6, quality: 'slow', confidence: 0.9 });
     expect(display.text.get('cue')).toBe('FASTER - match the dot');
-    expect(display.text.get('count')).toContain('COUNT\n1');
+    expect(display.text.get('count')).toContain('COUNT 1');
     expect(display.pages[display.pages.length - 1].images![0].name).toBe('figure');
 
     // Bracelet goes silent -> warning, no stale numbers.

@@ -110,8 +110,18 @@ export function readyScreen(view: PlacementView, src: SourceStatus, voice: Voice
 }
 
 /** Pace dot, drawn with text (no image refresh needed). Pulses bright/dim. */
-const D = '●'; // filled circle - confirm the G2 font has it (the simulator shows a placeholder if not)
-export const DOT = [`  ${D.repeat(3)}`, ` ${D.repeat(5)}`, D.repeat(7), ` ${D.repeat(5)}`, `  ${D.repeat(3)}`].join('\n');
+/**
+ * Pace marker: a small diamond of 5 dots.
+ *    ●
+ *   ●●●
+ *    ●
+ * In the G2 font (measured with @evenrealities/pretext) '●' and the full-width
+ * space U+3000 are both exactly 20 px, so one U+3000 centres the top and bottom
+ * dots over the middle row. The diamond is 60 x 81 px (3 lines x 27 px).
+ */
+const D = '\u25CF';
+const FW_SPACE = '\u3000';
+export const DOT = [`${FW_SPACE}${D}`, D.repeat(3), `${FW_SPACE}${D}`].join('\n');
 export const DOT_BRIGHT = 4;
 export const DOT_DIM = 1;
 /** Figure frames (display/frames.ts): pushing while the dot is bright. */
@@ -154,13 +164,14 @@ export function compressScreen(s: CompressState): Page {
     ? `${Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     pressure ${Math.round((v.pressure ?? 0) * 100)}%`
     : '-- /min     -- cm     (no reliable data)';
   const swapLeft = TARGETS.swapSeconds - s.elapsedS;
-  const swap = swapLeft > 0 ? `SWAP IN\n${mmss(swapLeft)}` : 'SWAP\nRESCUER\nNOW';
+  const swap = swapLeft > 0 ? `SWAP IN\n${mmss(swapLeft)}` : 'SWAP\nNOW';
 
   return {
     layout: 'compress',
     boxes: [
-      { name: 'dot', x: 0, y: 0, w: 150, h: 144, content: DOT, color: s.beatOn ? DOT_BRIGHT : DOT_DIM },
-      { name: 'count', x: 444, y: 0, w: 132, h: 144, content: `COUNT\n${s.count}\n\n${swap}`, color: 3 },
+      // 60x81 diamond + 6 px padding, centred in the 150x144 area left of the figure.
+      { name: 'dot', x: 37, y: 25, w: 76, h: 95, content: DOT, color: s.beatOn ? DOT_BRIGHT : DOT_DIM },
+      { name: 'count', x: 444, y: 0, w: 132, h: 144, content: `COUNT ${s.count}\n\n${swap}`, color: 3 },
       { name: 'cue', x: 0, y: 150, w: W, h: 44, content: compressAdvice(s), border: 2 },
       { name: 'nums', x: 0, y: 198, w: W, h: 40, content: nums, color: 3 },
       footer(s.voice === 'listening' ? 'Say "STOP" to end' : 'Double tap to end', 240),

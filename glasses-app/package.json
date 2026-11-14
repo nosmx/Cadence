@@ -1,6 +1,6 @@
 {
   "name": "cpr-coach-glasses",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "CPR Coach - Even Realities G2 glasses app (training tool, not a medical device)",
@@ -21,6 +21,7 @@
   "devDependencies": {
     "@evenrealities/evenhub-cli": "0.2.0",
     "@evenrealities/evenhub-simulator": "0.9.5",
+    "@evenrealities/pretext": "^0.1.4",
     "typescript": "5.6.3",
     "vite": "5.4.11",
     "vitest": "2.1.8"
