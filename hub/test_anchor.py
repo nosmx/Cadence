@@ -26,6 +26,10 @@ assert a.placement(0.7)["on_target"]
 a.feed(f"[CHG] Device {A} RSSI: -70", 1.6)
 p = a.placement(1.6)
 assert not p["on_target"] and p["trend"] == "farther"
+b = anchor.Anchor(addr=anchor.OUR_BAND, alpha=1.0)  # locked to our band from the start
+b.feed("[CHG] Device F9:C5:72:A6:36:8C RSSI: -30", 0)  # another team's band, very close: ignored
+b.feed("[NEW] Device F9:C5:72:A6:36:8C Vexo-HACK-27", 0)  # even if it has our name
+assert b.ema is None and b.addr == A
 assert a.placement(5)["signal"] == 0 and not a.placement(5)["on_target"]  # band went quiet
 assert hub.validate(p) is None, hub.validate(p)
 print("ok")

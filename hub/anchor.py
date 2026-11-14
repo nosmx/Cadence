@@ -7,12 +7,13 @@ compression depth. Tune --near-dbm on the real setup: watch the printed dBm with
 the spot, then off it, and pick a value in between.
 
 Run on the UNO Q (stdlib only, needs bluez's bluetoothctl):
-    python3 anchor.py --hub http://127.0.0.1:8000/msg            band found by exact name Vexo-HACK-27
-    python3 anchor.py --addr C1:3F:B9:F4:08:66 --near-dbm -55
+    python3 anchor.py --hub http://127.0.0.1:8000/msg            only our band, C1:3F:B9:F4:08:66 (Vexo-HACK-27)
+    python3 anchor.py --addr "" --name Vexo-HACK-27              another band: found by exact name instead
 Test anywhere: python3 hub/test_anchor.py
 """
 import argparse, json, re, subprocess, sys, threading, time, urllib.request
 
+OUR_BAND = "C1:3F:B9:F4:08:66"  # Vexo-HACK-27. Other teams' Vexo bands are in the same room.
 ANSI = re.compile(r"\x1b\[[0-9;]*m|\x01|\x02")
 # [NEW] Device C1:3F:B9:F4:08:66 Vexo-HACK-27     [CHG] Device C1:..:66 Name: Vexo-HACK-27
 NAME = re.compile(r"Device ([0-9A-F:]{17}) (?:Name: |Alias: )?(.+)$", re.I)
@@ -88,11 +89,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--hub", default="http://127.0.0.1:8000/msg")
     ap.add_argument("--name", default="Vexo-HACK-27", help="exact band name; other teams have Vexo bands too")
-    ap.add_argument("--addr", help="band address, skips the name search")
+    ap.add_argument("--addr", default=OUR_BAND, help='band address; every other device is ignored ("" = find by --name)')
     ap.add_argument("--near-dbm", type=float, default=-60, help="smoothed RSSI at or above this = on the spot")
     ap.add_argument("--stdin", action="store_true", help="read bluetoothctl lines from stdin (replay)")
     a = ap.parse_args()
-    anchor = Anchor(a.name, a.addr, a.near_dbm)
+    anchor = Anchor(a.name, a.addr or None, a.near_dbm)
 
     def reader():
         for line in (sys.stdin if a.stdin else scan_lines()):
