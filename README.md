@@ -1,2 +1,19 @@
 # Cadence
-CPR guide and detection
+
+CPR coaching on Even Realities G2 glasses with a wrist sensor.
+**Training tool for manikin or pillow practice. Not a medical device. Never practice on a person.**
+
+## Hub (Person 3)
+
+Message format every component uses: [PROTOCOL.md](PROTOCOL.md).
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+export ANTHROPIC_API_KEY=...          # optional: without it voice notes are logged as raw text
+.venv/bin/python hub/hub.py           # prints the LAN address for the phone; dashboard at http://localhost:8000
+.venv/bin/python hub/fake_sensor.py   # fake compression stream until the Vexo band is wired up
+.venv/bin/python hub/test_hub.py      # self-check
+```
+
+- Person 1 (band): `POST /msg` with `trigger`, `compression`, `vitals` messages.
+- Person 2 (glasses): subscribe to `GET /events` (SSE) or poll `GET /snapshot`; send `state`, `voice_event`, and `log_entry` confirmations to `POST /msg`.
