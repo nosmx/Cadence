@@ -51,6 +51,7 @@ the folder named by `VEXO_KIT`; it is never committed.
 | `python -m sensing.run 27 --record good1 --label good` | save raw samples to `recordings/good1.csv` |
 | `python -m sensing.run --replay recordings/good1.csv --ws` | replay a recording at real speed, no band |
 | `python -m sensing.arduino_check COM5` | before a run: what the Arduino sends over USB, at which speed (baud), and the exact `--arduino` to use (Mac: `/dev/cu.usbmodem…`) |
+| `python -m sensing.relay` | pass the board's WebSocket to the phone through the laptop (after `adb forward tcp:18765 tcp:8765`), when the phone cannot reach the board over Wi-Fi |
 | `python -m sensing.calibrate 27 depth` | band-only depth calibration (20 compressions, type the cm) |
 | `python -m sensing.calibrate 27 force` | optional force estimate (type kg from a scale) |
 | `python -m sensing.accuracy` | band-only depth error against the Arduino, over the recordings |

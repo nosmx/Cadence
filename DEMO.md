@@ -18,6 +18,20 @@ The phone must reach the board on port 8765. The venue Wi-Fi may block device-to
 2. On the phone, open CPR Coach. Under **Arduino connection**, enter `ws://<board-ip>:8765`, press **Use Arduino**.
 3. The **Source** line must say `connected`. If it stays on `connecting`: put the phone and the board on the phone's hotspot (`sudo nmcli dev wifi connect "HOTSPOT" password "PASS"` in `adb shell`), get the board's new IP (`ip -4 addr show wlan0`), add `ws://<new-ip>:8765` to `glasses-app/app.json`'s whitelist, re-pack and upload, and enter the new address on the phone.
 
+### Plan B: the Mac passes the data on (board stays on USB, no board Wi-Fi needed)
+
+Use this when the board cannot join the hotspot. The Mac joins the iPhone hotspot instead.
+
+1. Mac: Wi-Fi menu → join the iPhone's hotspot (keep the iPhone's Personal Hotspot screen open).
+2. Start the sensing program on the board as usual (step 2 below), in its own window.
+3. In a second Terminal window, in `Cadence/`:
+   ```bash
+   adb forward tcp:18765 tcp:8765
+   python3 -m sensing.relay
+   ```
+   It prints the address to use, e.g. `ws://172.20.10.4:8765`. If macOS asks whether Python may accept incoming connections, click **Allow**.
+4. Phone: enter that address under **Arduino connection** → **Use Arduino**. Glasses app 0.1.7+ allows every iPhone-hotspot address.
+
 ## Start-up (5 minutes before)
 
 1. **Band:** make sure the Mac is *not* connected to it (no `sensing.run` or dashboard on the Mac). Double-tap the band: blue blink.
