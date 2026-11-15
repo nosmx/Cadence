@@ -9,6 +9,7 @@ CPR coaching on Even Realities G2 glasses with a wrist sensor.
 - [glasses-app/](glasses-app/README.md): the G2 glasses app, voice controlled (Person 2)
 - [hub/](hub/): the hub that joins them, dashboard, voice-note timeline, UNO Q anchor (Person 3)
 - [PROTOCOL.md](PROTOCOL.md): the message format every part uses
+- [DEMO.md](DEMO.md): demo runbook (set-up, 60-second script, what to do if something fails)
 
 ## Hub (Person 3)
 
