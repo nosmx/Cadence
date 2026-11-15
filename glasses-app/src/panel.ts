@@ -177,8 +177,31 @@ export function mountPanel(
     shallow: [110, 3.8, 0.5, 0.9],
     lowconf: [110, 5.5, 0.8, 0.4],
   };
+  // Judges demo: the mock cycles too fast -> too shallow -> good by itself.
+  const autoDemo = $<HTMLInputElement>('auto-demo');
+  const demoStep = $('demo-step');
+  autoDemo.checked = s.autoDemo;
+  const stopAutoDemo = () => {
+    s.autoDemo = false;
+    autoDemo.checked = false;
+  };
+  autoDemo.addEventListener('change', () => (s.autoDemo = autoDemo.checked));
+  for (const id of ['rate', 'depth', 'pressure', 'confidence']) $(id).addEventListener('input', stopAutoDemo);
+  setInterval(() => {
+    demoStep.textContent = s.autoDemo
+      ? mock.demoStep ? `now: ${mock.demoStep}` : 'starts with compressions'
+      : 'off (manual)';
+    if (s.autoDemo && mock.demoStep) {
+      setRate(s.rate);
+      setDepth(s.depth);
+      setPressure(s.pressure);
+      setConf(s.confidence);
+    }
+  }, 500);
+
   document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
     b.addEventListener('click', () => {
+      stopAutoDemo();
       const [r, d, p, c] = presets[b.dataset.preset!];
       setRate(r);
       setDepth(d);

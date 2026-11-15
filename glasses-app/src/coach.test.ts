@@ -123,3 +123,18 @@ describe('parseCommand', () => {
     expect(parseCommand('[unk]')).toBeNull();
   });
 });
+
+describe('judges demo (mock data)', () => {
+  it('cycles too fast -> too shallow -> good, 10 s each, and the glasses advice follows', async () => {
+    const { demoStepAt } = await import('./sources/mock');
+    const adviceAt = (s: number) => {
+      const step = demoStepAt(s);
+      const msgs = [0, 1, 2, 3].map((i) => comp(i * 500, step.rate, step.depth));
+      return compressAdvice({ ...base, view: evaluateCompressions(msgs, 1500, 1600) });
+    };
+    expect(adviceAt(2)).toMatch(/^SLOWER/);
+    expect(adviceAt(12)).toMatch(/^PUSH HARDER/);
+    expect(adviceAt(22)).toMatch(/^GOOD/);
+    expect(adviceAt(32)).toMatch(/^SLOWER/); // loops
+  });
+});

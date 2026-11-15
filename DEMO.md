@@ -74,7 +74,7 @@ Say clearly: **depth from the wrist alone is an estimate** (accurate depth needs
 
 | Problem | Fix |
 |---|---|
-| Source stays `connecting` | Network: use the hotspot (above). Last resort: **Use mock data** on the phone and drive it from the panel (presets: too slow / good / too fast / shallow). |
+| Source stays `connecting` | Network: use the hotspot (above). Last resort: **Use mock data** on the phone: with **Auto demo** on, it plays SLOWER → PUSH HARDER → GOOD by itself (10 s each) once compressions start. |
 | Board says the band was not found | Mac still connected to the band? Double-tap again. Still nothing: press the band's RESET once, double-tap. |
 | `address already in use` on the board | `adb shell 'pkill -f sensing.run; true'`, start again. |
 | Voice not heard | Speak closer and louder, or tap the glasses touchpad (tap = READY, swipe up = BACK, double tap = STOP). |

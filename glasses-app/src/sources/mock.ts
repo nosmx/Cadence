@@ -12,6 +12,29 @@ export interface MockSettings {
   depth: number;
   pressure: number;
   confidence: number;
+  /** Judges demo: cycle through DEMO_SCRIPT by itself once compressions start. */
+  autoDemo: boolean;
+}
+
+/**
+ * Judges demo, played in a loop while compressing: each step's numbers make the glasses
+ * give that advice (rate is checked before depth, so "too shallow" keeps a good rate).
+ */
+export const DEMO_SCRIPT: { name: string; seconds: number; rate: number; depth: number; pressure: number }[] = [
+  { name: 'too fast -> SLOWER', seconds: 10, rate: 134, depth: 5.5, pressure: 0.8 },
+  { name: 'too shallow -> PUSH HARDER', seconds: 10, rate: 110, depth: 3.8, pressure: 0.45 },
+  { name: 'good -> GOOD', seconds: 10, rate: 110, depth: 5.5, pressure: 0.8 },
+];
+const DEMO_TOTAL_S = DEMO_SCRIPT.reduce((t, s) => t + s.seconds, 0);
+
+/** Which demo step is playing `seconds` after compressions started. */
+export function demoStepAt(seconds: number): (typeof DEMO_SCRIPT)[number] {
+  let t = ((seconds % DEMO_TOTAL_S) + DEMO_TOTAL_S) % DEMO_TOTAL_S;
+  for (const step of DEMO_SCRIPT) {
+    if (t < step.seconds) return step;
+    t -= step.seconds;
+  }
+  return DEMO_SCRIPT[DEMO_SCRIPT.length - 1];
 }
 
 export const DEFAULT_MOCK: MockSettings = {
@@ -19,10 +42,11 @@ export const DEFAULT_MOCK: MockSettings = {
   placementMode: 'auto',
   manual: { on_target: false, direction: 'head', distance_cm: 6 },
   braceletOnline: true,
-  rate: 92,
-  depth: 4.4,
-  pressure: 0.7,
+  rate: 134,
+  depth: 5.5,
+  pressure: 0.8,
   confidence: 0.9,
+  autoDemo: true,
 };
 
 const jitter = (amount: number) => (Math.random() * 2 - 1) * amount;
@@ -45,6 +69,9 @@ export class MockSource implements MessageSource {
   private offset = { x: 9, y: -6 };
   private compressing = false;
   private compressionTimer: ReturnType<typeof setTimeout> | undefined;
+  private compressingSince = 0;
+  /** The demo step playing now (for the panel), or undefined when not in auto demo. */
+  demoStep: string | undefined;
 
   onMessage(cb: (msg: InboundMsg) => void): void {
     this.messages.on(cb);
@@ -69,8 +96,20 @@ export class MockSource implements MessageSource {
   /** Called by the app when the session ends or restarts. */
   setCompressing(on: boolean): void {
     this.compressing = on;
+    this.compressingSince = Date.now();
     clearTimeout(this.compressionTimer);
     if (on) this.scheduleCompression();
+  }
+
+  /** In auto demo, set rate/depth/pressure from the script for the current moment. */
+  private applyDemo(): void {
+    if (!this.settings.autoDemo || !this.compressing) {
+      this.demoStep = undefined;
+      return;
+    }
+    const step = demoStepAt((Date.now() - this.compressingSince) / 1000);
+    Object.assign(this.settings, { rate: step.rate, depth: step.depth, pressure: step.pressure, confidence: 0.9 });
+    this.demoStep = step.name;
   }
 
   /** Knock the hands off the spot again (auto mode). */
@@ -115,6 +154,7 @@ export class MockSource implements MessageSource {
   }
 
   private scheduleCompression(): void {
+    this.applyDemo();
     const s = this.settings;
     const interval = (60000 / Math.max(30, s.rate)) * (1 + jitter(0.04));
     this.compressionTimer = setTimeout(() => {
