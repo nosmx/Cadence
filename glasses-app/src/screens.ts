@@ -148,13 +148,13 @@ export function compressAdvice(s: CompressState): string {
  * Layout (576x288):
  *   [circle 124x124] [CPR figure image 288x144] [count / swap 132x144]
  *   [one-line advice, bordered                                    ]
- *   [rate   depth   pressure                                      ]
+ *   [rate   depth   push strength                                 ]
  *   [say STOP to end                                              ]
  */
 export function compressScreen(s: CompressState): Page {
   const v = s.view;
   const nums = v.status === 'ok'
-    ? `${Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     pressure ${Math.round((v.pressure ?? 0) * 100)}%`
+    ? `${Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     push ${Math.round((v.pressure ?? 0) * 100)}%`
     : '-- /min     -- cm     (no reliable data)';
   const swapLeft = TARGETS.swapSeconds - s.elapsedS;
   const swap = swapLeft > 0 ? `SWAP IN\n${mmss(swapLeft)}` : 'SWAP\nNOW';

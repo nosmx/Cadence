@@ -20,6 +20,7 @@ export function mountPanel(
   voice: VoskVoice,
   enableMic: (() => Promise<void>) | null,
   beeper: PhoneBeeper,
+  arduino: { current: string; save: (url: string) => Promise<void> },
 ): void {
   const phaseEl = $('phase');
   const sourceEl = $('source');
@@ -63,6 +64,19 @@ export function mountPanel(
   setInterval(showVoice, 500);
   showVoice();
   voice.heard.on(({ command, text }) => log(`heard "${text}" -> ${command}`));
+
+  // Arduino (sensing program) address, remembered on the phone.
+  const wsInput = $<HTMLInputElement>('ws-url');
+  wsInput.value = arduino.current || 'ws://172.17.20.85:8765';
+  $('ws-connect').addEventListener('click', () => {
+    const url = wsInput.value.trim();
+    if (!/^wss?:\/\/[^\s/]+/.test(url)) {
+      log('Arduino address must look like ws://172.17.20.85:8765');
+      return;
+    }
+    void arduino.save(url);
+  });
+  $('ws-mock').addEventListener('click', () => void arduino.save(''));
 
   // Phone beep on each beat.
   const beepOn = $<HTMLInputElement>('beep-on');

@@ -13,8 +13,12 @@ import { WebSocketSource } from './sources/websocket';
 import { startBrowserMic, VoskVoice } from './voice/vosk';
 
 /**
- * URL options:
- *   ?ws=ws://192.168.4.1:81   use the real Arduino WebSocket server instead of the mock
+ * Where the data comes from, first match wins:
+ *   ?ws=ws://172.17.20.85:8765   in the address (dev server / QR code)
+ *   the "Arduino address" saved on the phone panel (works in the app installed from the Even Hub)
+ *   otherwise the built-in mock
+ *
+ * Other URL options:
  *   ?preview=1                skip the Even bridge (browser preview only)
  *   ?even=1                   force the Even bridge on
  *   ?novoice=1                don't load speech recognition
@@ -36,14 +40,44 @@ async function detectBridge(): Promise<EvenAppBridge | null> {
   return waitForEvenAppBridge();
 }
 
+const WS_KEY = 'cprcoach.ws';
+
+/** Saved Arduino address: Even app storage when available, else the browser's. */
+async function loadSavedWs(bridge: EvenAppBridge | null): Promise<string> {
+  try {
+    if (bridge) return (await bridge.getLocalStorage(WS_KEY)) || '';
+  } catch {
+    /* fall through */
+  }
+  try {
+    return localStorage.getItem(WS_KEY) || '';
+  } catch {
+    return '';
+  }
+}
+
+async function saveWs(bridge: EvenAppBridge | null, url: string): Promise<void> {
+  try {
+    if (bridge) await bridge.setLocalStorage(WS_KEY, url);
+  } catch {
+    /* fall through */
+  }
+  try {
+    if (url) localStorage.setItem(WS_KEY, url);
+    else localStorage.removeItem(WS_KEY);
+  } catch {
+    /* storage unavailable: the setting just won't be remembered */
+  }
+}
+
 async function main(): Promise<void> {
-  const wsUrl = params.get('ws');
+  const bridge = await detectBridge();
+  const wsUrl = params.get('ws') || (await loadSavedWs(bridge));
   const mock = wsUrl ? null : new MockSource();
-  const source: MessageSource = mock ?? new WebSocketSource(wsUrl!);
+  const source: MessageSource = mock ?? new WebSocketSource(wsUrl);
 
   const frames = await buildFrames();
   const preview = new BrowserDisplay(document.getElementById('preview')!, frames);
-  const bridge = await detectBridge();
   const glasses = bridge ? new EvenDisplay(bridge, frames) : null;
   const display: Display = glasses ? new TeeDisplay([glasses, preview]) : preview;
   document.getElementById('mode')!.textContent = bridge
@@ -103,7 +137,16 @@ async function main(): Promise<void> {
     }
   });
 
-  mountPanel(app, source, mock, voice, enableMic, beeper);
+  mountPanel(app, source, mock, voice, enableMic, beeper, {
+    current: wsUrl,
+    save: async (url: string) => {
+      await saveWs(bridge, url);
+      // Reload without a ?ws= in the address so the saved value is what gets used.
+      params.delete('ws');
+      const q = params.toString();
+      location.replace(location.pathname + (q ? `?${q}` : ''));
+    },
+  });
   // Dev server only (stripped from builds): lets scripts drive the app, e.g. demo recordings.
   if (import.meta.env.DEV) (window as unknown as { cprCoach: unknown }).cprCoach = { app, voice, beeper };
   app.start();

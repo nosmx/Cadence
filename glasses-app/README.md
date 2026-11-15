@@ -101,22 +101,16 @@ New version later: bump `version` in `app.json`, then `npm run pack`, `npx evenh
 
 For day-to-day testing, `npm run qr` (dev mode) is faster: no packaging, and changes reload live.
 
-## Connecting the real Arduino
+## Connecting the real Arduino (UNO Q)
 
-Load the app with `?ws=` pointing at the Arduino's WebSocket server, e.g. `http://localhost:5173/?ws=ws://192.168.4.1:81`. Then the mock panel hides and messages come from the Arduino.
+The UNO Q runs the sensing program (`sensing/`): it connects to the bracelet over Bluetooth and serves the live messages on a WebSocket, port 8765. Point the glasses app at it in either way:
 
-The Arduino sends one JSON object per WebSocket text frame (draft schema — see `src/protocol.ts`):
+- **Phone panel (works in the app installed from the Even Hub):** under *Arduino connection*, enter `ws://<uno-q-ip>:8765` and press **Use Arduino**. It is remembered on the phone; **Use mock data** switches back.
+- **Address (dev server / QR):** `http://<mac-ip>:5173/?ws=ws://<uno-q-ip>:8765`.
 
-```json
-{"type":"placement","ts":1731600000000,"source":"arduino","on_target":false,"distance_cm":4.2,"direction":"head","signal":0.8}
-{"type":"compression","ts":1731600000000,"source":"bracelet","rate_cpm":108,"depth_cm":5.3,"pressure":0.72,"quality":"good","confidence":0.9}
-```
+The phone must be able to reach the board (same network that allows device-to-device traffic; a phone hotspot works when the venue Wi-Fi blocks it), and the board's address must be in `app.json`'s network whitelist before packaging.
 
-- `direction`: `head` | `feet` | `left` | `right` | `null` (patient-relative).
-- `compression`: one message per compression.
-- The glasses send back `{"type":"voice_event","phrase":"ready",...}` and `{"type":"confirm","what":"hands_placed" | "start_compressions" | "end_session",...}`.
-
-Before packaging, put the Arduino's address in `app.json` → `permissions[network].whitelist`.
+Messages used from the sensing program (see `sensing/README.md`): `compression` (rate, depth, push strength, confidence, its running `count`), `placement` (only when the board has a distance sensor), and `heartbeat` (keeps the running count). The value shown as **push** is push strength from the wrist's acceleration, not pressure: the band has no pressure sensor.
 
 ## Scripts
 

@@ -58,6 +58,9 @@ export class CoachApp {
   private compressions: CompressionMsg[] = [];
   private compressionAt?: number;
   private count = 0;
+  /** Last running count the bracelet reported, and its value when this session started. */
+  private bandCount?: number;
+  private bandCountAtStart?: number;
   private startedAt = 0;
   private stats = { confident: 0, rateOk: 0, depthOk: 0 };
   private summary?: Summary;
@@ -167,6 +170,7 @@ export class CoachApp {
     this.compressions = [];
     this.compressionAt = undefined;
     this.count = 0;
+    this.bandCountAtStart = this.bandCount;
     this.stats = { confident: 0, rateOk: 0, depthOk: 0 };
     this.startedAt = this.now();
     this.send({ type: 'confirm', ts: this.now(), source: 'glasses', what: 'start_compressions' });
@@ -213,6 +217,10 @@ export class CoachApp {
 
   private onMessage(m: InboundMsg): void {
     const now = this.now();
+    if (m.type === 'heartbeat') {
+      if (m.count !== null) this.bandCount = m.count;
+      return;
+    }
     if (m.type === 'placement') {
       this.prevDistance = this.placement?.distance_cm;
       this.placement = m;
@@ -221,7 +229,15 @@ export class CoachApp {
       this.compressions.push(m);
       if (this.compressions.length > 20) this.compressions.shift();
       this.compressionAt = now;
-      this.count++;
+      if (m.count !== undefined) {
+        // Use the bracelet's own count (it confirms the first pushes of a run together),
+        // relative to where it stood when this session started.
+        this.bandCountAtStart ??= Math.max(0, m.count - 1);
+        this.count = Math.max(this.count, m.count - this.bandCountAtStart);
+        this.bandCount = m.count;
+      } else {
+        this.count++;
+      }
       if (m.confidence >= LIMITS.minConfidence) {
         this.stats.confident++;
         if (band(m.rate_cpm, TARGETS.rateMinCpm, TARGETS.rateMaxCpm) === 'ok') this.stats.rateOk++;

@@ -110,6 +110,15 @@
             <button data-say="back">"BACK"</button>
             <button data-say="stop">"STOP"</button>
           </div>
+          <h2>Arduino connection</h2>
+          <div class="row">
+            <input id="ws-url" type="text" inputmode="url" spellcheck="false" autocomplete="off"
+              style="flex:1; min-width:180px; font:inherit; padding:6px 8px; border-radius:6px; border:1px solid var(--line); background:var(--bg); color:var(--ink)" />
+          </div>
+          <div class="row">
+            <button id="ws-connect" class="primary">Use Arduino</button>
+            <button id="ws-mock">Use mock data</button>
+          </div>
           <h2>Phone beep</h2>
           <div class="row">
             <label><input type="checkbox" id="beep-on" /> Beep on every beat</label>

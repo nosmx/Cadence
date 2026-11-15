@@ -42,6 +42,16 @@ export interface CompressionMsg extends Base {
   quality: string;
   /** 0..1. Below the threshold the app must not show numbers as solid. */
   confidence: number;
+  /** Sender's running compression count (the sensing program counts from its own start). */
+  count?: number;
+}
+
+/** Sensing program -> glasses, once a second: keeps the running count known between compressions. */
+export interface HeartbeatMsg extends Base {
+  type: 'heartbeat';
+  count: number | null;
+  /** No compression for 2 s (hands off). */
+  paused: boolean | null;
 }
 
 /** Glasses -> Arduino/hub. */
@@ -55,7 +65,7 @@ export interface ConfirmMsg extends Base {
   what: 'hands_placed' | 'start_compressions' | 'end_session';
 }
 
-export type InboundMsg = PlacementMsg | CompressionMsg;
+export type InboundMsg = PlacementMsg | CompressionMsg | HeartbeatMsg;
 export type OutboundMsg = VoiceEventMsg | ConfirmMsg;
 
 const num = (v: unknown): number | undefined =>
@@ -96,6 +106,17 @@ export function parseMessage(raw: unknown): InboundMsg | null {
       pressure: num(m.pressure) ?? 0,
       quality: typeof m.quality === 'string' ? m.quality : '',
       confidence: num(m.confidence) ?? 0,
+      count: num(m.count),
+    };
+  }
+
+  if (m.type === 'heartbeat') {
+    return {
+      type: 'heartbeat',
+      ts,
+      source,
+      count: num(m.count) ?? null,
+      paused: typeof m.paused === 'boolean' ? m.paused : null,
     };
   }
 
