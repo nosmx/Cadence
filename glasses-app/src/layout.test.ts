@@ -39,6 +39,9 @@ function pages(): Page[] {
     { status: 'low_confidence', confidence: 0.3 },
     { status: 'ok', rate: 138, depth: 7.9, pressure: 1, confidence: 0.9, rateBand: 'high', depthBand: 'high' },
     { status: 'ok', rate: 110, depth: 3.1, pressure: 0.5, confidence: 0.9, rateBand: 'ok', depthBand: 'low' },
+    // From the sensing program: its own label and push strength in g.
+    { status: 'ok', rate: 188.8, depth: 12.75, pushG: 7.99, confidence: 0.9, label: 'release fully', rateBand: 'high', depthBand: 'high' },
+    { status: 'ok', rate: 99.9, depth: 4.4, pushG: 1.25, confidence: 0.7, label: 'lighter', rateBand: 'low', depthBand: 'low' },
   ];
   for (const v of voices) {
     out.push(splashScreen(v));

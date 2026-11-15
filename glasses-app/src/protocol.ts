@@ -44,6 +44,14 @@ export interface CompressionMsg extends Base {
   confidence: number;
   /** Sender's running compression count (the sensing program counts from its own start). */
   count?: number;
+  /**
+   * From the sensing program: its own label (good | faster | slower | harder | lighter |
+   * release fully), its low-confidence flag and the push strength in g. When present the
+   * glasses show these as they are, so the glasses match the sensing program's output.
+   */
+  quality_full?: string;
+  low_confidence?: boolean;
+  push_g?: number;
 }
 
 /** Sensing program -> glasses, once a second: keeps the running count known between compressions. */
@@ -107,6 +115,9 @@ export function parseMessage(raw: unknown): InboundMsg | null {
       quality: typeof m.quality === 'string' ? m.quality : '',
       confidence: num(m.confidence) ?? 0,
       count: num(m.count),
+      quality_full: typeof m.quality_full === 'string' ? m.quality_full : undefined,
+      low_confidence: typeof m.low_confidence === 'boolean' ? m.low_confidence : undefined,
+      push_g: num(m.push_intensity_g),
     };
   }
 

@@ -30,6 +30,17 @@ The phone must reach the board on port 8765. The venue Wi-Fi may block device-to
 3. **Phone:** open CPR Coach. Source = `connected`. Tap the phone screen once (allows the beep), press **Test beep**, phone not on silent.
 4. **Glasses:** put them on. The first screen says `Say "READY" to begin` (if it says `VOICE OFF`, the speech model is missing: taps still work).
 
+## Showing the computer next to the glasses
+
+The glasses show the **same numbers and advice as the latest line** in the board's terminal (`--pretty`):
+rate, depth, push in g, and the label (`faster` → FASTER, `harder` → PUSH HARDER, ...). Differences you will see, and why:
+
+- The terminal prints every compression; the glasses show only the newest. Compare with the **last** line.
+- Nothing appears until the band has seen 4 even pushes (about 2 s); the glasses say START PUSHING meanwhile.
+- The glasses can trail the terminal by a fraction of a second (Bluetooth to the glasses).
+- **Count:** the terminal counts since the program started; the glasses count this session. Restart the board program right before the demo and they match.
+- If the phone's **Source** line says `mock`, the glasses show made-up numbers: switch to **Use Arduino**.
+
 ## The 60-second script
 
 | Say / do | Glasses show | Point to make |

@@ -134,6 +134,19 @@ export interface CompressState {
   band?: 'alive' | 'paused';
 }
 
+/** The sensing program's label (quality_full) as the glasses' one-line advice. */
+export function labelAdvice(label: string): string {
+  switch (label) {
+    case 'good': return 'GOOD - keep going';
+    case 'faster': return 'FASTER - match the circle';
+    case 'slower': return 'SLOWER - match the circle';
+    case 'harder': return 'PUSH HARDER - keep the pace';
+    case 'lighter': return 'LESS DEEP - keep the pace';
+    case 'release fully': return 'RELEASE FULLY - let the chest rise';
+    default: return label.toUpperCase();
+  }
+}
+
 /** One instruction at a time, most important first. One line. */
 export function compressAdvice(s: CompressState): string {
   const v = s.view;
@@ -143,6 +156,7 @@ export function compressAdvice(s: CompressState): string {
   if (v.status === 'waiting') return 'START PUSHING - push when the circle flashes';
   if (v.status === 'low_confidence') return 'READING UNCLEAR - keep pushing with the circle';
   if (s.handsDrift) return `HANDS DRIFTED - ${s.handsDrift.toLowerCase()}`;
+  if (v.label !== undefined) return labelAdvice(v.label);
   if (v.rateBand !== 'ok') return `${rateAdvice(v.rateBand)} - match the circle`;
   if (v.depthBand !== 'ok') return `${depthAdvice(v.depthBand)} - keep the pace`;
   return 'GOOD - keep going';
@@ -158,7 +172,8 @@ export function compressAdvice(s: CompressState): string {
 export function compressScreen(s: CompressState): Page {
   const v = s.view;
   const nums = v.status === 'ok'
-    ? `${Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     push ${Math.round((v.pressure ?? 0) * 100)}%`
+    ? `${v.label !== undefined ? v.rate!.toFixed(1) : Math.round(v.rate!)} /min     ${v.depth!.toFixed(1)} cm     ` +
+      (v.pushG !== undefined ? `push ${v.pushG.toFixed(2)} g` : `push ${Math.round((v.pressure ?? 0) * 100)}%`)
     : '-- /min     -- cm     (no reliable data)';
   const swapLeft = TARGETS.swapSeconds - s.elapsedS;
   const swap = swapLeft > 0 ? `SWAP IN\n${mmss(swapLeft)}` : 'SWAP\nNOW';

@@ -43,6 +43,10 @@ export interface CompressionView {
   rateBand?: Band;
   depthBand?: Band;
   confidence?: number;
+  /** The sensing program's own label, when it sent one (shown as is). */
+  label?: string;
+  /** Push strength in g, when the sender measures it. */
+  pushG?: number;
 }
 
 /**
@@ -58,8 +62,24 @@ export function evaluateCompressions(
   if (now - receivedAt > LIMITS.compressionStaleMs) return { status: 'lost' };
 
   const last = recent[recent.length - 1];
-  if (last.confidence < LIMITS.minConfidence) {
-    return { status: 'low_confidence', confidence: last.confidence };
+  // The sensing program decides confidence itself (low_confidence below 0.5); otherwise use ours.
+  const low = last.low_confidence ?? last.confidence < LIMITS.minConfidence;
+  if (low) return { status: 'low_confidence', confidence: last.confidence };
+
+  if (last.quality_full !== undefined) {
+    // From the sensing program: it already smooths the rate and picks the label, so show
+    // its numbers unchanged - the glasses then match its output line for line.
+    return {
+      status: 'ok',
+      rate: last.rate_cpm,
+      depth: last.depth_cm,
+      pressure: last.pressure,
+      pushG: last.push_g,
+      confidence: last.confidence,
+      label: last.quality_full,
+      rateBand: band(last.rate_cpm, TARGETS.rateMinCpm, TARGETS.rateMaxCpm),
+      depthBand: band(last.depth_cm, TARGETS.depthMinCm, TARGETS.depthMaxCm),
+    };
   }
 
   // Smooth over recent confident samples so the advice doesn't flicker.

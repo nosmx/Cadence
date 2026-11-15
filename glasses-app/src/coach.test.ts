@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { evaluateCompressions, evaluatePlacement, LIMITS } from './coach';
 import type { CompressionMsg, PlacementMsg } from './protocol';
 import { parseMessage } from './protocol';
-import { compressAdvice, compressScreen } from './screens';
+import { compressAdvice, compressScreen, labelAdvice } from './screens';
 import { parseCommand } from './voice/commands';
 import { validatePage } from './display/types';
 
@@ -58,6 +58,30 @@ describe('evaluatePlacement', () => {
   });
 });
 
+describe('sensing program messages', () => {
+  const sensing = parseMessage({
+    type: 'compression', ts: 0, src: 'band', source: 'band', count: 37, rate_cpm: 92.2, depth_cm: 2.6,
+    push_intensity_g: 1.17, pressure: 0.62, quality: 'faster', quality_full: 'faster', confidence: 0.7, low_confidence: false,
+  }) as CompressionMsg;
+  it('shows the sensing numbers and label unchanged (matches its terminal output)', () => {
+    const v = evaluateCompressions([comp(-500, 120, 5.5), sensing], 0, 10);
+    expect(v).toMatchObject({ status: 'ok', rate: 92.2, depth: 2.6, pushG: 1.17, label: 'faster' });
+    const nums = compressScreen({ ...base, view: v }).boxes.find((b) => b.name === 'nums')!.content;
+    expect(nums).toBe('92.2 /min     2.6 cm     push 1.17 g');
+    expect(compressAdvice({ ...base, view: v })).toBe('FASTER - match the circle');
+  });
+  it('uses the sensing low-confidence flag, not our own threshold', () => {
+    expect(evaluateCompressions([{ ...sensing, confidence: 0.55, low_confidence: false }], 0, 10).status).toBe('ok');
+    expect(evaluateCompressions([{ ...sensing, confidence: 0.45, low_confidence: true }], 0, 10).status).toBe('low_confidence');
+  });
+  it('maps every sensing label to one line of advice', () => {
+    expect(labelAdvice('release fully')).toBe('RELEASE FULLY - let the chest rise');
+    expect(labelAdvice('lighter')).toMatch(/^LESS DEEP/);
+  });
+});
+
+const base = { count: 10, elapsedS: 30, src: 'connected' as const, voice: 'listening' as const, beatOn: true };
+
 describe('parseMessage', () => {
   it('rejects malformed compression messages', () => {
     expect(parseMessage({ type: 'compression', rate_cpm: 'fast' })).toBeNull();
@@ -70,7 +94,6 @@ describe('parseMessage', () => {
 });
 
 describe('screens', () => {
-  const base = { count: 10, elapsedS: 30, src: 'connected' as const, voice: 'listening' as const, beatOn: true };
   it('compress screen fits G2 limits and hides numbers when lost', () => {
     const page = compressScreen({ ...base, view: { status: 'lost' } });
     expect(validatePage(page)).toBeNull();
