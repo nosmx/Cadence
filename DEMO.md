@@ -23,7 +23,7 @@ The phone must reach the board on port 8765. The venue Wi-Fi may block device-to
 1. **Band:** make sure the Mac is *not* connected to it (no `sensing.run` or dashboard on the Mac). Double-tap the band: blue blink.
 2. **Board** (Terminal on the Mac, in `Cadence/`):
    ```bash
-   adb shell 'pkill -f sensing.run'
+   adb shell 'pkill -f sensing.run; true'
    adb shell -t 'cd /home/arduino/cadence && python3 -m sensing.run 27 --ws --pretty'
    ```
    Wait for `Sensing from Vexo-HACK-27`. Leave this window open. (The `pkill` clears an old copy; two copies cannot share port 8765.)
@@ -62,7 +62,7 @@ Say clearly: **depth from the wrist alone is an estimate** (accurate depth needs
 |---|---|
 | Source stays `connecting` | Network: use the hotspot (above). Last resort: **Use mock data** on the phone and drive it from the panel (presets: too slow / good / too fast / shallow). |
 | Board says the band was not found | Mac still connected to the band? Double-tap again. Still nothing: press the band's RESET once, double-tap. |
-| `address already in use` on the board | `adb shell 'pkill -f sensing.run'`, start again. |
+| `address already in use` on the board | `adb shell 'pkill -f sensing.run; true'`, start again. |
 | Voice not heard | Speak closer and louder, or tap the glasses touchpad (tap = READY, swipe up = BACK, double tap = STOP). |
 | No beep | Tap the phone screen once, un-mute, **Test beep**. The circle still shows the pace. |
 | Everything fails | Play `glasses-app/docs/demo.mp4`. |
