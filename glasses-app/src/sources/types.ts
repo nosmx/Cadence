@@ -6,6 +6,8 @@ export type SourceStatus = 'connecting' | 'connected' | 'disconnected';
 export interface MessageSource {
   readonly name: string;
   readonly status: SourceStatus;
+  /** Optional: why the last connection attempt failed. */
+  readonly detail?: string;
   onMessage(cb: (msg: InboundMsg) => void): void;
   onStatus(cb: (status: SourceStatus) => void): void;
   send(msg: OutboundMsg): void;

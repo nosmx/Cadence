@@ -29,7 +29,10 @@ export function mountPanel(
   const showPhase = () => (phaseEl.textContent = app.phase);
   app.onPhaseChange(showPhase);
   showPhase();
-  const showSource = () => (sourceEl.textContent = `${source.name} - ${source.status}`);
+  const showSource = () =>
+    (sourceEl.textContent = `${source.name} - ${source.status}` +
+      (source.status !== 'connected' && source.detail ? ` [${source.detail}]` : '') +
+      (source.status !== 'connected' && source.name !== 'mock' ? ` | page: ${location.origin}` : ''));
   source.onStatus(showSource);
   showSource();
 

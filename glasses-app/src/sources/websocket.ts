@@ -12,6 +12,9 @@ import { Emitter, type MessageSource, type SourceStatus } from './types';
 export class WebSocketSource implements MessageSource {
   readonly name: string;
   status: SourceStatus = 'disconnected';
+  /** Why the last attempt failed, for the phone panel ("" when connected). */
+  detail = '';
+  private attempts = 0;
   private ws: WebSocket | undefined;
   private retryMs = 500;
   private messages = new Emitter<InboundMsg>();
@@ -41,12 +44,30 @@ export class WebSocketSource implements MessageSource {
     this.statuses.emit(s);
   }
 
+  private retry(): void {
+    setTimeout(() => this.connect(), this.retryMs);
+    this.retryMs = Math.min(this.retryMs * 2, 5000);
+  }
+
   private connect(): void {
+    this.attempts++;
     this.setStatus('connecting');
-    const ws = new WebSocket(this.url);
+    const started = Date.now();
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(this.url);
+    } catch (e) {
+      // Thrown synchronously when the page is not allowed to open this address at all
+      // (e.g. ws:// from an https page = mixed content). Without this the retries stopped.
+      this.detail = `blocked before connecting: ${e instanceof Error ? `${e.name}: ${e.message}` : String(e)}`;
+      this.setStatus('disconnected');
+      this.retry();
+      return;
+    }
     this.ws = ws;
     ws.onopen = () => {
       this.retryMs = 500;
+      this.detail = '';
       this.setStatus('connected');
     };
     ws.onmessage = (ev) => {
@@ -57,10 +78,14 @@ export class WebSocketSource implements MessageSource {
         // Ignore malformed frames; staleness checks surface a silent sensor.
       }
     };
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
+      const ms = Date.now() - started;
+      // A failure within a few ms never reached the network (blocked inside the app);
+      // a failure after seconds is the network (no route, firewall, wrong address).
+      this.detail = `attempt ${this.attempts}: closed ${ev.code} after ${ms} ms` +
+        (ms < 50 ? ' (failed at once: refused, or blocked by the app)' : ms > 2500 ? ' (no answer: network?)' : '');
       this.setStatus('disconnected');
-      setTimeout(() => this.connect(), this.retryMs);
-      this.retryMs = Math.min(this.retryMs * 2, 5000);
+      this.retry();
     };
     ws.onerror = () => ws.close();
   }
