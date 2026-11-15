@@ -20,10 +20,10 @@ export interface MockSettings {
  * Judges demo, played in a loop while compressing: each step's numbers make the glasses
  * give that advice (rate is checked before depth, so "too shallow" keeps a good rate).
  */
-export const DEMO_SCRIPT: { name: string; seconds: number; rate: number; depth: number; pressure: number }[] = [
-  { name: 'too fast -> SLOWER', seconds: 10, rate: 134, depth: 5.5, pressure: 0.8 },
-  { name: 'too shallow -> PUSH HARDER', seconds: 10, rate: 110, depth: 3.8, pressure: 0.45 },
-  { name: 'good -> GOOD', seconds: 10, rate: 110, depth: 5.5, pressure: 0.8 },
+export const DEMO_SCRIPT: { name: string; seconds: number; rate: number; depth: number; pressure: number; label: string }[] = [
+  { name: 'too fast -> SLOWER', seconds: 3, rate: 134, depth: 5.5, pressure: 0.8, label: 'slower' },
+  { name: 'too shallow -> PUSH HARDER', seconds: 3, rate: 110, depth: 3.8, pressure: 0.45, label: 'harder' },
+  { name: 'good -> GOOD', seconds: 3, rate: 110, depth: 5.5, pressure: 0.8, label: 'good' },
 ];
 const DEMO_TOTAL_S = DEMO_SCRIPT.reduce((t, s) => t + s.seconds, 0);
 
@@ -72,6 +72,8 @@ export class MockSource implements MessageSource {
   private compressingSince = 0;
   /** The demo step playing now (for the panel), or undefined when not in auto demo. */
   demoStep: string | undefined;
+  /** Its advice label, sent with each compression so the glasses switch on the dot. */
+  private demoLabel: string | undefined;
 
   onMessage(cb: (msg: InboundMsg) => void): void {
     this.messages.on(cb);
@@ -105,11 +107,13 @@ export class MockSource implements MessageSource {
   private applyDemo(): void {
     if (!this.settings.autoDemo || !this.compressing) {
       this.demoStep = undefined;
+      this.demoLabel = undefined;
       return;
     }
     const step = demoStepAt((Date.now() - this.compressingSince) / 1000);
     Object.assign(this.settings, { rate: step.rate, depth: step.depth, pressure: step.pressure, confidence: 0.9 });
     this.demoStep = step.name;
+    this.demoLabel = step.label;
   }
 
   /** Knock the hands off the spot again (auto mode). */
@@ -159,6 +163,7 @@ export class MockSource implements MessageSource {
     const interval = (60000 / Math.max(30, s.rate)) * (1 + jitter(0.04));
     this.compressionTimer = setTimeout(() => {
       if (!this.compressing) return;
+      this.applyDemo();             // the demo step at send time, so advice switches on the 3 s mark
       if (s.braceletOnline) {
         const msg: CompressionMsg = {
           type: 'compression', ts: Date.now(), source: 'mock',
@@ -167,6 +172,7 @@ export class MockSource implements MessageSource {
           pressure: Math.min(1, Math.max(0, s.pressure + jitter(0.05))),
           quality: s.depth < 5 ? 'shallow' : s.rate < 100 ? 'slow' : s.rate > 120 ? 'fast' : 'good',
           confidence: Math.min(1, Math.max(0, s.confidence + jitter(0.03))),
+          ...(this.demoLabel ? { quality_full: this.demoLabel, low_confidence: false } : {}),
         };
         this.messages.emit(msg);
       }

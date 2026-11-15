@@ -197,7 +197,7 @@ export function mountPanel(
       setPressure(s.pressure);
       setConf(s.confidence);
     }
-  }, 500);
+  }, 150);
 
   document.querySelectorAll<HTMLButtonElement>('[data-preset]').forEach((b) =>
     b.addEventListener('click', () => {
