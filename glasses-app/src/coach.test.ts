@@ -77,6 +77,13 @@ describe('screens', () => {
     expect(page.boxes.find((b) => b.name === 'nums')!.content).toContain('--');
     expect(page.boxes.find((b) => b.name === 'cue')!.content).toContain('NO BRACELET DATA');
   });
+  it('tells a paused band apart from a lost one (sensing heartbeat)', () => {
+    const lost = { ...base, view: { status: 'lost' as const } };
+    expect(compressAdvice({ ...lost, band: 'paused' })).toMatch(/^HANDS OFF/);
+    expect(compressAdvice({ ...lost, band: 'alive' })).toMatch(/^FINDING RHYTHM/);
+    expect(compressAdvice(lost)).toMatch(/^NO BRACELET DATA/);
+    expect(compressAdvice({ ...lost, src: 'disconnected', band: 'paused' })).toMatch(/^NO BRACELET DATA/);
+  });
   it('gives one instruction at a time: rate before depth', () => {
     const view = { status: 'ok' as const, rate: 90, depth: 4, rateBand: 'low' as const, depthBand: 'low' as const };
     expect(compressAdvice({ ...base, view })).toMatch(/^FASTER/);

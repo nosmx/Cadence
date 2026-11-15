@@ -39,6 +39,8 @@ export type Phase = 'splash' | 'setup' | 'align' | 'ready' | 'compress' | 'summa
 export type Input = 'tap' | 'double' | 'up' | 'down';
 type Action = 'next' | 'back' | 'end';
 
+/** A heartbeat this recent means the band is connected (they come once a second). */
+const HEARTBEAT_FRESH_MS = 2500;
 /** Off target this long while on the ready screen => go back to aligning. */
 const READY_DRIFT_MS = 1000;
 /** Fraction of each beat the circle is lit. */
@@ -61,6 +63,8 @@ export class CoachApp {
   /** Last running count the bracelet reported, and its value when this session started. */
   private bandCount?: number;
   private bandCountAtStart?: number;
+  /** Latest heartbeat from the sensing program: the band is alive even with no compressions. */
+  private heartbeat?: { at: number; paused: boolean | null };
   private startedAt = 0;
   private stats = { confident: 0, rateOk: 0, depthOk: 0 };
   private summary?: Summary;
@@ -219,6 +223,8 @@ export class CoachApp {
     const now = this.now();
     if (m.type === 'heartbeat') {
       if (m.count !== null) this.bandCount = m.count;
+      this.heartbeat = { at: now, paused: m.paused };
+      this.tick();
       return;
     }
     if (m.type === 'placement') {
@@ -293,6 +299,9 @@ export class CoachApp {
           src,
           voice,
           beatOn: this.beatOn(),
+          band: this.heartbeat && now - this.heartbeat.at <= HEARTBEAT_FRESH_MS
+            ? (this.heartbeat.paused ? 'paused' : 'alive')
+            : undefined,
           handsDrift: pv.status === 'off_target' ? directionText(pv.msg?.direction ?? null) : undefined,
         });
       }

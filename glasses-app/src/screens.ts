@@ -130,11 +130,15 @@ export interface CompressState {
   beatOn: boolean;
   /** Set when the Arduino reports the hands have drifted off the spot. */
   handsDrift?: string;
+  /** From the sensing program's heartbeat: band connected, and whether hands are off. */
+  band?: 'alive' | 'paused';
 }
 
 /** One instruction at a time, most important first. One line. */
 export function compressAdvice(s: CompressState): string {
   const v = s.view;
+  if (s.src === 'connected' && v.status === 'lost' && s.band === 'paused') return 'HANDS OFF - resume with the circle';
+  if (s.src === 'connected' && v.status === 'lost' && s.band === 'alive') return 'FINDING RHYTHM - keep pushing';
   if (s.src !== 'connected' || v.status === 'lost') return 'NO BRACELET DATA - keep pushing with the circle';
   if (v.status === 'waiting') return 'START PUSHING - push when the circle flashes';
   if (v.status === 'low_confidence') return 'READING UNCLEAR - keep pushing with the circle';

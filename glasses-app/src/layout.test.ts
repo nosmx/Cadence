@@ -52,6 +52,8 @@ function pages(): Page[] {
         out.push(compressScreen({ view, count: 1234, elapsedS, src: 'connected', voice: v, beatOn: true }));
       }
       out.push(compressScreen({ view, count: 5, elapsedS: 3, src: 'disconnected', voice: v, beatOn: false }));
+      out.push(compressScreen({ view, count: 5, elapsedS: 3, src: 'connected', voice: v, beatOn: false, band: 'paused' }));
+      out.push(compressScreen({ view, count: 5, elapsedS: 3, src: 'connected', voice: v, beatOn: false, band: 'alive' }));
       out.push(compressScreen({ view, count: 5, elapsedS: 3, src: 'connected', voice: v, beatOn: false, handsDrift: "MOVE TO PATIENT'S RIGHT" }));
     }
     out.push(summaryScreen({ count: 1234, durationS: 754, confident: 1200, rateOk: 999, depthOk: 1000 }, v));
