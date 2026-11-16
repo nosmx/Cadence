@@ -36,6 +36,9 @@ ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 DASHBOARD = Path(__file__).with_name("dashboard.html")
 DISTANCE = Path(__file__).with_name("distance.html")  # live band <-> UNO Q signal page
 LIVE = Path(__file__).with_name("live.html")  # live coach page: band pushes -> FASTER / PUSH HARDER / GOOD
+ROOT = Path(__file__).resolve().parent.parent
+KIT_JS = ROOT / "vexo-open-kit" / "js" / "src"  # served read-only at /kit/ so /live can connect the band in Chrome
+pipe, pipe_lock, rec = None, threading.Lock(), None  # Person 1's sensing pipeline + recording, for samples posted by /live
 
 CLIENT = None  # set by make_client() at startup; tests leave it None (raw-text entries)
 # Spend caps. Over a cap the note is still logged, as raw text (llm: false).
@@ -181,6 +184,34 @@ def handle(m):
         threading.Thread(target=on_voice, args=(m,), daemon=True).start()
 
 
+def on_samples(body):
+    """Band samples from /live (Chrome's Bluetooth) -> Person 1's pipeline -> the usual messages.
+    The cue is sensing/quality.py's rule label, the same as `python -m sensing.run`. No LLM."""
+    global pipe, rec
+    out = []
+    with pipe_lock:  # one pipeline, samples in order
+        if str(ROOT) not in sys.path:
+            sys.path.insert(0, str(ROOT))
+        from sensing.pipeline import Pipeline
+        from sensing.recorder import LABELS, Recorder, Sample
+        if pipe is None or body.get("reset"):
+            pipe = Pipeline()
+            if rec:
+                rec.close()
+            # every connect = a new recordings/live-<time>.csv, same format as `sensing.run --record`
+            label = body.get("label") if body.get("label") in LABELS else None
+            rec = Recorder(time.strftime("live-%Y%m%d-%H%M%S") + ("-" + label if label else ""), label)
+            print("recording to", rec.path, flush=True)
+        for t, ax, ay, az, gx, gy, gz, n in body.get("samples", []):
+            gyro = None if None in (gx, gy, gz) else (gx * gx + gy * gy + gz * gz) ** 0.5
+            out += pipe.add_sample(t, ax, ay, az, n, gyro_dps=gyro)
+            rec.band(Sample(t, ax, ay, az, gx, gy, gz, n, time.monotonic()))
+        rec._file.flush()
+        status = pipe.update_status(body.get("connected", True), False, None)
+    for m in out + ([status] if status else []):
+        publish(m)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _head(self, code, ctype="application/json"):
         self.send_response(code)
@@ -198,31 +229,44 @@ class Handler(BaseHTTPRequestHandler):
         self._head(204)
 
     def do_GET(self):
+        path = self.path.split("?")[0]  # pages may carry ?options (e.g. /live?sim)
         if self.headers.get("Upgrade", "").lower() == "websocket":  # any path: glasses use ?ws=ws://ip:8000
             self._ws()
-        elif self.path == "/":
+        elif path == "/":
             self._head(200, "text/html; charset=utf-8")
             self.wfile.write(DASHBOARD.read_bytes())
-        elif self.path in ("/cpr", "/distance"):
+        elif path in ("/cpr", "/distance"):
             self._head(200, "text/html; charset=utf-8")
             self.wfile.write(DISTANCE.read_bytes())
-        elif self.path in ("/live", "/coach"):
+        elif path in ("/live", "/coach"):
             self._head(200, "text/html; charset=utf-8")
             self.wfile.write(LIVE.read_bytes())
-        elif self.path == "/snapshot":
+        elif path.startswith("/kit/"):
+            f = (KIT_JS / path[5:]).resolve()
+            if f.suffix != ".js" or not f.is_relative_to(KIT_JS) or not f.is_file():
+                return self._json(404, {"error": "not found"})
+            self._head(200, "text/javascript; charset=utf-8")
+            self.wfile.write(f.read_bytes())
+        elif path == "/snapshot":
             self._json(200, snapshot())
-        elif self.path == "/events":
+        elif path == "/events":
             self._sse()
         else:
             self._json(404, {"error": "not found"})
 
     def do_POST(self):
-        if self.path != "/msg":
+        if self.path not in ("/msg", "/samples"):
             return self._json(404, {"error": "not found"})
         try:
             m = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"null")
         except json.JSONDecodeError:
             return self._json(400, {"error": "invalid JSON"})
+        if self.path == "/samples":
+            try:
+                on_samples(m)
+            except (TypeError, ValueError, AttributeError) as e:
+                return self._json(400, {"error": f"bad samples: {e}"})
+            return self._json(200, {"ok": True})
         err = validate(m)
         if err:
             return self._json(400, {"error": err})

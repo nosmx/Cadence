@@ -41,6 +41,8 @@
 <main>
   <h1>CPR Coach · live from band 27</h1>
   <p class="sub">Push on the pillow with the band on your wrist. <span id="state">Connecting…</span></p>
+  <p class="sub"><button id="connect">Connect band 27 in this browser</button>
+    Chrome or Edge. Double-tap the band first, close the kit dashboard, and don't run <code>sensing.run</code> at the same time.</p>
 
   <div class="card idle" id="cuecard">
     <div id="cue">PUSH</div>
@@ -66,10 +68,10 @@
 </main>
 <script>
 // Cues are Person 1's rule label (sensing/quality.py), shown as is: no LLM, no extra logic here.
-const CUE = { faster: "FASTER", slower: "SLOWER", harder: "PUSH HARDER", lighter: "PUSH LIGHTER",
+const CUE = { faster: "FASTER", slower: "SLOWER", harder: "PUSH HARDER", lighter: "PUSH LIGHTER", softer: "PUSH LIGHTER",
               "release fully": "LET IT COME UP", good: "GOOD" };
 const WHY = { faster: "Too slow: speed up to 100–120 a minute", slower: "Too fast: slow down to 100–120 a minute",
-              harder: "Too shallow: push deeper, 5–6 cm", lighter: "Too deep: ease off, 5–6 cm",
+              harder: "Too shallow: push deeper, 5–6 cm", lighter: "Too deep: ease off, 5–6 cm", softer: "Too deep: ease off, 5–6 cm",
               "release fully": "Let the chest come all the way back up", good: "Rate and depth on target" };
 const LOST_MS = 1500;   // same as the glasses: no push for 1.5 s = stopped
 const $ = (id) => document.getElementById(id);
@@ -130,13 +132,16 @@ function draw() {
   c.width = w * dpr; c.height = h * dpr;
   const g = c.getContext("2d"); g.scale(dpr, dpr);
   const css = getComputedStyle(document.documentElement), col = (n) => css.getPropertyValue(n);
-  const pad = 28, plotW = w - 2 * pad, DMAX = 8, SMAX = 1.0;
+  // Axes grow to fit the pushes shown (real band spikes reach several g before calibration).
+  const top = (k, min) => Math.max(min, ...pushes.map((p) => p[k] ?? 0));
+  const DMAX = Math.ceil(top("depth", 8) / 2) * 2, SMAX = Math.ceil(top("spike", 1) * 2) / 2;
+  const pad = 28, plotW = w - 2 * pad;
   const y = (v, max) => h - 16 - Math.min(v, max) / max * (h - 26);
   g.fillStyle = col("--band"); g.fillRect(pad, y(6, DMAX), plotW, y(5, DMAX) - y(6, DMAX));
   g.font = "11px sans-serif"; g.strokeStyle = col("--line"); g.fillStyle = col("--muted"); g.lineWidth = 1;
-  for (let d = 0; d <= DMAX; d += 2) {
+  for (let d = 0; d <= DMAX; d += DMAX / 4) {
     g.beginPath(); g.moveTo(pad, y(d, DMAX)); g.lineTo(w - pad, y(d, DMAX)); g.stroke();
-    g.fillText(d, 6, y(d, DMAX) + 4);
+    g.fillText(+d.toFixed(1), 6, y(d, DMAX) + 4);
     g.fillText((d / DMAX * SMAX).toFixed(2), w - pad + 4, y(d, DMAX) + 4);
   }
   const slot = plotW / 30;
@@ -153,6 +158,43 @@ function draw() {
   pushes.forEach((p, i) => { if (p.spike != null) { g.beginPath(); g.arc(pad + (i + 0.5) * slot, y(p.spike, SMAX), 3, 0, 7); g.fill(); } });
 }
 setInterval(render, 100); render();
+
+// Band in Chrome: the kit's library (Web Bluetooth) streams motion, the hub runs Person 1's
+// pipeline on it (POST /samples) and the cues come back over /events like any other band message.
+const BAND = 27;     // our band: Vexo-HACK-27
+$("connect").onclick = async () => {
+  const btn = $("connect");
+  btn.disabled = true;
+  try {
+    const { Band } = await import("/kit/index.js");
+    const q = new URLSearchParams(location.search);
+    const sim = q.has("sim");          // ?sim = pretend band, for testing the page
+    const label = q.get("label");      // ?label=good|shallow|fast|slow goes into the recording
+    state(sim ? "Pretend band…" : "Pick Vexo-HACK-27 in the list…", false);
+    const b = await Band.connect(BAND, sim ? { transport: "sim" } : { autoReconnect: true });
+    await b.setMotion({ rate: 100, sensors: "both", accelRange: 8, gyroRange: 500 });   // = sensing/config.py
+    let buf = [], busy = false, reset = true;
+    b.on("motion", (m) => buf.push([m.t, m.ax, m.ay, m.az, m.gx, m.gy, m.gz, m.n]));
+    b.on("disconnect", () => { btn.disabled = false; btn.textContent = "Connect band 27 again"; });
+    await b.configure({ motion: 100 });
+    btn.textContent = "Band 27 connected";
+    const send = setInterval(async () => {      // one batch at a time, so samples reach the hub in order
+      if (busy) return;
+      busy = true;
+      const samples = buf; buf = [];
+      const connected = !!b.connected;
+      try {
+        await fetch("/samples", { method: "POST", body: JSON.stringify({ samples, connected, reset, label }) });
+        reset = false;
+      } catch { state("Hub not reachable", false); }
+      busy = false;
+      if (!connected && !b.reconnecting) clearInterval(send);
+    }, 100);
+  } catch (e) {
+    state(e.message, false);                      // the kit's messages say what to do next
+    btn.disabled = false;
+  }
+};
 </script>
 </body>
 </html>

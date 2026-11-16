@@ -109,4 +109,27 @@ assert all(hub.llm_allowed() for _ in range(hub.LLM_PER_MIN)) and not hub.llm_al
 hub.llm_calls[:] = [time.time() - 61] * (hub.LLM_PER_RUN - 1)  # old calls: minute window is clear
 assert hub.llm_allowed() and not hub.llm_allowed()  # ...but the per-run cap is reached
 
+# /samples (band in Chrome on /live): 100 Hz pushes at 110/min become compressions via Person 1's pipeline
+import math
+def post_samples(body):
+    req = urllib.request.Request(URL + "/samples", json.dumps(body).encode())
+    try:
+        return urllib.request.urlopen(req).status
+    except urllib.error.HTTPError as e:
+        return e.code
+assert post_samples({"samples": [[1, 2]]}) == 400
+pushes = [[i * 10, 0.0, 0.0, 1 + 1.5 * math.sin(2 * math.pi * 110 / 60 * i / 100), 0, 0, 0, i] for i in range(1500)]
+assert post_samples({"samples": pushes, "connected": True, "reset": True}) == 200
+c = {m["type"]: m for m in snap()}.get("compression")
+assert c and c["count"] >= 5 and 95 < c["rate_cpm"] < 125, c
+hub.rec.close()
+assert sum(1 for _ in open(hub.rec.path)) == 1501  # header + every sample recorded
+hub.rec.path.unlink()
+assert urllib.request.urlopen(URL + "/kit/index.js").status == 200
+try:
+    urllib.request.urlopen(URL + "/kit/../../hub/hub.py")
+    raise AssertionError("kit route served a file outside the kit")
+except urllib.error.HTTPError as e:
+    assert e.code == 404
+
 print("ok")
