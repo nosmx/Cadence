@@ -97,46 +97,49 @@ def loop(source, pipeline, publisher, chest=None, recorder=None, voice=None, sec
     next_place = started
     spot = chest_input.SpotDetector()
     samples_seen = 0
-    while not source.finished:
-        now = time.monotonic()
-        if seconds is not None and now - started >= seconds:
-            break
-        samples = source.poll()
-        for s in samples:
-            clock.see(s.t / 1000.0, s.host)
-        if chest is not None:
-            for distance, host in chest.drain():
-                spot.add(distance, now)
+    try:
+        while not source.finished:
+            now = time.monotonic()
+            if seconds is not None and now - started >= seconds:
+                break
+            samples = source.poll()
+            for s in samples:
+                clock.see(s.t / 1000.0, s.host)
+            if chest is not None:
+                for distance, host in chest.drain():
+                    spot.add(distance, now)
+                    if recorder:
+                        recorder.chest(host, distance)
+                    t_band = clock.to_band(host)
+                    if t_band is not None:
+                        pipeline.add_chest(t_band, distance)
+            reconnecting = source.reconnecting
+            for s in samples:
+                samples_seen += 1
                 if recorder:
-                    recorder.chest(host, distance)
-                t_band = clock.to_band(host)
-                if t_band is not None:
-                    pipeline.add_chest(t_band, distance)
-        reconnecting = source.reconnecting
-        for s in samples:
-            samples_seen += 1
-            if recorder:
-                recorder.band(s)
-            for message in pipeline.add_sample(s.t, s.ax, s.ay, s.az, s.n, reconnecting=reconnecting,
-                                               gyro_dps=s.gyro_dps):
+                    recorder.band(s)
+                for message in pipeline.add_sample(s.t, s.ax, s.ay, s.az, s.n, reconnecting=reconnecting,
+                                                   gyro_dps=s.gyro_dps):
+                    publisher.publish(message)
+                    if show:
+                        print(pretty(message), flush=True)
+                    if voice:
+                        voice.on_compression(pipeline.state, now)
+                    if led:
+                        quality = None if message["low_confidence"] else message["quality_full"]
+                        source.set_led(LED.get(quality, LED_OTHER))
+            message = pipeline.update_status(source.connected, reconnecting, source.battery_percent)
+            if message:
                 publisher.publish(message)
-                if show:
-                    print(pretty(message), flush=True)
-                if voice:
-                    voice.on_compression(pipeline.state, now)
-                if led:
-                    quality = None if message["low_confidence"] else message["quality_full"]
-                    source.set_led(LED.get(quality, LED_OTHER))
-        message = pipeline.update_status(source.connected, reconnecting, source.battery_percent)
-        if message:
-            publisher.publish(message)
-        if spot.fresh(now) and now >= next_place:   # stale Arduino: send nothing, the glasses show "lost"
-            next_place = now + 1.0 / config.PLACEMENT_HZ
-            publisher.publish(messages.placement(spot.on_target(now), spot.press_cm()))
-        if now >= next_beat:
-            next_beat = max(next_beat + config.HEARTBEAT_S, now)
-            publisher.publish(pipeline.heartbeat())
-        time.sleep(config.LOOP_SLEEP_S)
+            if spot.fresh(now) and now >= next_place:   # stale Arduino: send nothing, the glasses show "lost"
+                next_place = now + 1.0 / config.PLACEMENT_HZ
+                publisher.publish(messages.placement(spot.on_target(now), spot.press_cm()))
+            if now >= next_beat:
+                next_beat = max(next_beat + config.HEARTBEAT_S, now)
+                publisher.publish(pipeline.heartbeat())
+            time.sleep(config.LOOP_SLEEP_S)
+    except KeyboardInterrupt:      # Ctrl+C: still report what was seen
+        pass
     return samples_seen
 
 

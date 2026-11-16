@@ -207,7 +207,7 @@ def test_turning_the_wrist_is_not_counted():
     """Putting the band on: rhythmic acceleration, but the wrist turns fast."""
     samples, _ = synth.compressions(110, 5.5, count=20)
     detector = Detector()
-    events = [e for e in (detector.add(*s, gyro_dps=400.0) for s in samples) if e]
+    events = [e for e in (detector.add(*s, gyro_dps=config.GYRO_MAX_DPS + 100) for s in samples) if e]
     assert events == [] and detector.count == 0
     detector = Detector()
     events = [e for e in (detector.add(*s, gyro_dps=40.0) for s in samples) if e]

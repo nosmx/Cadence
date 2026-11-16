@@ -20,13 +20,13 @@ RATE_INTERVALS = 5              # spec: rate = 60 / median of the last 5 interva
 MAX_CYCLE_S = 1.5               # GUESSED: a cycle longer than this (40/min) gets no depth
 # Rhythm lock (against counting other arm movements). All GUESSED; tune from real recordings.
 LOCK_CROSSINGS = 4              # evenly spaced pushes in a row before anything is counted
-LOCK_TOLERANCE = 0.25           # ... whose intervals differ by at most 25 %
-LOCK_MIN_DEPTH_CM = 1.0         # ... each at least this deep (band estimate, before calibration)
+LOCK_TOLERANCE = 0.40           # TUNED on a real band-27 recording (was 0.25): ... whose intervals differ by at most 40 %
+LOCK_MIN_DEPTH_CM = 0.5         # TUNED (was 1.0): ... each at least this deep (band estimate, before calibration)
 MIN_INTERVAL_S = 0.30           # 200 per minute
 MAX_INTERVAL_S = 1.20           # 50 per minute
 LOCKED_TOLERANCE = 0.35         # once locked: an interval this far from the usual one is odd
 UNLOCK_AFTER_ODD = 2            # two odd ones in a row end the rhythm
-GYRO_MAX_DPS = 250.0            # mean wrist turning speed in a cycle above this is not a compression
+GYRO_MAX_DPS = 500.0            # TUNED (was 250; real pushes measured 100-450): mean wrist turning above this is not a compression
 PAUSE_S = 2.0                   # spec: no compression for 2 s = hands off
 SWAP_S = 120.0                  # spec: 2-minute rescuer swap timer
 SWAP_RESET_PAUSE_S = 3.0        # GUESSED: once the timer is at 0, a pause this long restarts it
